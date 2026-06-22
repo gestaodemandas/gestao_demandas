@@ -219,7 +219,7 @@
   .filters input { min-width: 220px; }
 
   /* ===== Kanban ===== */
-  .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; align-items: start; }
+  .board { display: grid; grid-template-columns: repeat(auto-fit, minmax(186px, 1fr)); gap: 12px; align-items: start; }
   @media (max-width: 1100px) { .board { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 640px) { .board { grid-template-columns: 1fr; } }
 
@@ -680,6 +680,41 @@
   .scope-seg button { background: none; border: none; color: var(--text-dim); padding: 7px 15px;
     border-radius: 8px; font-size: .78rem; cursor: pointer; font-family: inherit; font-weight: 600; }
   .scope-seg button.active { background: var(--accent); color: #fff; }
+
+  /* status "pausado" */
+  .tag.st-pausado { background: rgba(138,127,176,.16); color: #b3a8d6; }
+  body.light .tag.st-pausado { color: #5b5280; }
+  .col[data-status="pausado"] .col-dot { background: #8a7fb0; }
+  .col[data-status="pausado"] .col-head h2 { color: #b3a8d6; }
+  body.light .col[data-status="pausado"] .col-head h2 { color: #5b5280; }
+
+  /* hero "Pendentes" no Painel */
+  .pend-hero { display: flex; align-items: center; gap: 16px; margin-top: 20px; padding: 16px 22px;
+    border-radius: 16px; border: 1px solid var(--border); background: linear-gradient(120deg, var(--surface-2), transparent); }
+  body:not(.light) .pend-hero { background: linear-gradient(120deg, rgba(255,255,255,.05), transparent); }
+  .pend-hero .ph-num { font-size: 2.3rem; font-weight: 800; letter-spacing: -1.2px; line-height: 1; color: var(--text); }
+  .pend-hero .ph-txt .t { font-size: .95rem; font-weight: 700; }
+  .pend-hero .ph-txt .s { font-size: .76rem; color: var(--text-dim); margin-top: 2px; }
+
+  /* calendário estilo kanban (meses, rolagem horizontal) */
+  .cal-kanban { display: flex; gap: 14px; overflow-x: auto; padding: 4px 2px 14px; scroll-behavior: smooth; }
+  .cal-month { flex: 0 0 240px; background: rgba(255,255,255,.022); border: 1px solid var(--border);
+    border-radius: 14px; padding: 12px; min-height: 150px; }
+  body.light .cal-month { background: var(--surface); }
+  .cal-month.current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft); }
+  .cal-month .cm-head { display: flex; align-items: center; justify-content: space-between;
+    font-size: .8rem; font-weight: 700; margin-bottom: 12px; text-transform: capitalize; }
+  .cal-month .cm-count { font-size: .62rem; font-weight: 700; color: var(--text-mute);
+    background: var(--surface-3); border-radius: 99px; padding: 2px 9px; }
+  .cal-mcard { display: flex; gap: 10px; align-items: flex-start; padding: 9px 11px; margin-bottom: 8px;
+    background: var(--surface-2); border: 1px solid var(--border); border-left: 3px solid var(--text-mute);
+    border-radius: 8px; cursor: pointer; transition: border-color .15s; }
+  body.light .cal-mcard { background: var(--surface-3); }
+  .cal-mcard:hover { border-color: var(--border-light); }
+  .cal-mcard .cmc-day { font-size: .92rem; font-weight: 800; line-height: 1; min-width: 20px; text-align: center; color: var(--text-dim); }
+  .cal-mcard .cmc-t { font-size: .73rem; font-weight: 600; line-height: 1.3; }
+  .cal-mcard .cmc-m { font-size: .6rem; color: var(--text-mute); margin-top: 3px; }
+  .cal-month .cm-empty { font-size: .72rem; color: var(--text-mute); padding: 10px 2px; }
 </style>
 </head>
 <body class="locked">
@@ -711,6 +746,7 @@
   </div>
   <div class="header-actions">
     <button class="btn-icon new-btn" onclick="openModal()" title="Nova demanda">+</button>
+    <button class="btn btn-ghost" onclick="openSolicitar()" title="Solicitar demanda a outra pessoa" style="padding:8px 12px;font-size:.8rem;flex-shrink:0">Solicitar</button>
     <div class="sync-chip" id="syncChip" onclick="refreshData()" title="Clique para atualizar os dados">
       <span class="dot"></span><span id="syncLabel">Carregando...</span>
     </div>
@@ -745,6 +781,7 @@
     <button class="tab-btn" data-tab="calendario" onclick="switchTab('calendario', this)">Calendário</button>
     <button class="tab-btn" data-tab="listagem" onclick="switchTab('listagem', this)">Listagem</button>
     <button class="tab-btn" data-tab="aprovacoes" id="tabBtnAprovacoes" onclick="switchTab('aprovacoes', this)" style="display:none">Aprovações <span id="apprTabCount"></span></button>
+    <button class="tab-btn" data-tab="solicitacoes" onclick="switchTab('solicitacoes', this)">Solicitações <span id="solicTabCount"></span></button>
     <button class="tab-btn" data-tab="historico" onclick="switchTab('historico', this)">Histórico</button>
   </nav>
 
@@ -755,51 +792,24 @@
 
   <!-- ── TAB: QUADRO ── -->
   <div id="tab-quadro" class="tab-content">
-    <section class="filters">
-      <input type="text" id="fBusca" placeholder="🔍 Buscar demanda...">
-      <select id="fSetor"><option value="">Todos os setores</option></select>
-      <select id="fSolicitante"><option value="">Todos os solicitantes</option></select>
-      <select id="fTipo">
-        <option value="">Todos os tipos</option>
-        <option value="principal">Principal</option>
-        <option value="paralela">Paralela</option>
-        <option value="oportunidade">Oportunidade de melhoria</option>
-      </select>
-      <select id="fPrioridade">
-        <option value="">Todas as prioridades</option>
-        <option value="alta">Alta</option>
-        <option value="media">Média</option>
-        <option value="baixa">Baixa</option>
-      </select>
-      <select id="fRelevancia">
-        <option value="">Todas as relevâncias</option>
-        <option value="normal">Normal</option>
-        <option value="alta">Alta</option>
-        <option value="critica">⚡ Crítica</option>
-      </select>
-      <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
-      <span id="scopeQuadro" style="margin-left:auto"></span>
-    </section>
+    <section class="filters" id="filtersQuadro"></section>
     <section class="board" id="board"></section>
   </div>
 
   <!-- ── TAB: CALENDÁRIO ── -->
   <div id="tab-calendario" class="tab-content">
+    <section class="filters" id="filtersCal"></section>
     <div class="cal-wrap">
-      <div class="cal-nav">
-        <button class="cal-nav-btn" onclick="calNav(-1)">‹</button>
-        <div class="cal-nav-title" id="calTitle">—</div>
-        <button class="cal-nav-btn" onclick="calNav(1)">›</button>
-        <span id="scopeCal" style="margin-left:18px"></span>
+      <div class="cal-nav" style="justify-content:flex-start;gap:10px">
+        <button class="cal-nav-btn" onclick="calScroll(-1)" title="Voltar">‹</button>
+        <button class="cal-nav-btn" onclick="calScroll(1)" title="Avançar">›</button>
+        <div style="font-size:.82rem;color:var(--text-dim)">Prazos por mês — role para navegar</div>
       </div>
-      <div class="cal-grid">
-        <div class="cal-dow">Dom</div><div class="cal-dow">Seg</div><div class="cal-dow">Ter</div>
-        <div class="cal-dow">Qua</div><div class="cal-dow">Qui</div><div class="cal-dow">Sex</div><div class="cal-dow">Sáb</div>
-      </div>
-      <div class="cal-grid" id="calDays"></div>
+      <div class="cal-kanban" id="calKanban"></div>
       <div class="cal-legend">
-        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--red)"></div>Prioridade alta / atrasada</div>
-        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--yellow)"></div>Prazo normal</div>
+        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--red-bright)"></div>Atrasada</div>
+        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--orange)"></div>Crítica</div>
+        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--lblue)"></div>A vencer</div>
         <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--green)"></div>Concluída</div>
       </div>
     </div>
@@ -816,9 +826,9 @@
           <button class="tbl-filter-btn" onclick="tblFilter('andamento', this)">Em andamento</button>
           <button class="tbl-filter-btn" onclick="tblFilter('atrasadas', this)">Atrasadas</button>
           <button class="tbl-filter-btn" onclick="tblFilter('concluido', this)">Concluídas</button>
-          <span id="scopeLst" style="margin-left:auto"></span>
         </div>
       </div>
+      <section class="filters" id="filtersLst" style="margin-bottom:14px"></section>
       <div class="tbl-scroll">
         <table>
           <thead>
@@ -847,6 +857,18 @@
       <div style="font-size:.78rem;color:var(--text-dim);margin-top:4px">Solicitações dos seus liderados aguardando sua decisão.</div>
     </div>
     <div id="apprList"></div>
+  </div>
+
+  <!-- ── TAB: SOLICITAÇÕES ── -->
+  <div id="tab-solicitacoes" class="tab-content">
+    <div style="margin-bottom:14px">
+      <div class="tbl-title" style="font-size:1rem">Solicitações</div>
+      <div style="font-size:.78rem;color:var(--text-dim);margin-top:4px">Demandas que pediram a você (aceite ou recuse) e o que você solicitou a outras pessoas.</div>
+    </div>
+    <span class="section-label" style="margin-top:0">Recebidas — aguardando sua resposta</span>
+    <div id="solicRecebidas"></div>
+    <span class="section-label">Enviadas por você</span>
+    <div id="solicEnviadas"></div>
   </div>
 
   <!-- ── TAB: HISTÓRICO ── -->
@@ -928,6 +950,7 @@
             <option value="backlog">Backlog</option>
             <option value="andamento">Em andamento</option>
             <option value="aguardando">Aguardando terceiros</option>
+            <option value="pausado">Pausado</option>
             <option value="concluido">Concluído</option>
           </select>
         </div>
@@ -962,6 +985,67 @@
   </div>
 </div>
 
+<!-- Modal: Solicitar demanda -->
+<div class="overlay" id="solicitarOverlay" onclick="if(event.target===this) closeSolicitar()">
+  <div class="modal">
+    <h2>Solicitar demanda a outra pessoa</h2>
+    <form id="solicitarForm" onsubmit="enviarSolicitacao(event)">
+      <div class="form-grid">
+        <div class="full">
+          <label>Para quem</label>
+          <select id="sPara"></select>
+        </div>
+        <div class="full">
+          <label>Título</label>
+          <input type="text" id="sTitulo" required placeholder="O que você precisa que a pessoa faça">
+        </div>
+        <div class="full">
+          <label>Descrição</label>
+          <textarea id="sDescricao" placeholder="Detalhes (opcional)"></textarea>
+        </div>
+        <div>
+          <label>Setor</label>
+          <select id="sSetor"></select>
+        </div>
+        <div>
+          <label>Tipo</label>
+          <select id="sTipo">
+            <option value="principal">Principal</option>
+            <option value="paralela">Paralela</option>
+            <option value="oportunidade">Oportunidade de melhoria</option>
+          </select>
+        </div>
+        <div>
+          <label>Prioridade</label>
+          <select id="sPrioridade">
+            <option value="alta">Alta</option>
+            <option value="media" selected>Média</option>
+            <option value="baixa">Baixa</option>
+          </select>
+        </div>
+        <div>
+          <label>Relevância</label>
+          <select id="sRelevancia">
+            <option value="normal" selected>Normal</option>
+            <option value="alta">Alta</option>
+            <option value="critica">⚡ Crítica</option>
+          </select>
+        </div>
+        <div class="full">
+          <label>Prazo sugerido</label>
+          <input type="date" id="sPrazo">
+        </div>
+      </div>
+      <div class="modal-actions">
+        <div class="right">
+          <button type="button" class="btn btn-ghost" onclick="closeSolicitar()">Cancelar</button>
+          <button type="submit" class="btn" id="sBtn">Enviar solicitação</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="toast" id="toast">
   <span class="ico">🏆</span>
   <div><b id="toastTitle">Conquista!</b><small id="toastMsg"></small></div>
@@ -980,9 +1064,10 @@ const STATUS = [
   { id: "backlog",    label: "Backlog" },
   { id: "andamento",  label: "Em andamento" },
   { id: "aguardando", label: "Aguardando terceiros" },
+  { id: "pausado",    label: "Pausado" },
   { id: "concluido",  label: "Concluído" },
 ];
-const STATUS_LABEL = { backlog: "Backlog", andamento: "Em andamento", aguardando: "Aguardando", concluido: "Concluído" };
+const STATUS_LABEL = { backlog: "Backlog", andamento: "Em andamento", aguardando: "Aguardando", pausado: "Pausado", concluido: "Concluído" };
 const TIPO_LABEL = { principal: "Principal", paralela: "Paralela", oportunidade: "Oportunidade" };
 const PRI_LABEL = { alta: "Alta", media: "Média", baixa: "Baixa" };
 const RELEVANCIA_LABEL = { normal: "Normal", alta: "Alta", critica: "Crítica" };
@@ -1214,7 +1299,7 @@ function renderHistorico() {
 }
 
 function fmtHistVal(v) {
-  const stClass = { "Backlog": "st-backlog", "Em andamento": "st-andamento", "Aguardando": "st-aguardando", "Concluído": "st-concluido" };
+  const stClass = { "Backlog": "st-backlog", "Em andamento": "st-andamento", "Aguardando": "st-aguardando", "Pausado": "st-pausado", "Concluído": "st-concluido" };
   if (stClass[v]) return `<span class="tag ${stClass[v]}">${v}</span>`;
   return `<span style="font-size:.75rem;color:var(--text-dim)">${esc(v)}</span>`;
 }
@@ -1305,10 +1390,12 @@ function switchTab(id, btn) {
   document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
   if (btn) btn.classList.add("active");
   document.getElementById("tab-" + id).classList.add("active");
+  renderFilters();
   if (id === "calendario") renderCalendar();
   if (id === "listagem") renderTable();
   if (id === "historico") renderHistorico();
   if (id === "aprovacoes") renderApprovals();
+  if (id === "solicitacoes") renderSolicitacoes();
 }
 
 /* ══════════ CALENDÁRIO ══════════ */
@@ -1323,40 +1410,45 @@ function calNav(dir) {
 }
 
 function renderCalendar() {
-  document.getElementById("calTitle").textContent = MESES[calMonth] + " " + calYear;
-  const container = document.getElementById("calDays");
-  const firstDay = new Date(calYear, calMonth, 1).getDay();
-  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
-  const daysInPrev = new Date(calYear, calMonth, 0).getDate();
-  const t = new Date();
-
-  const evMap = {};
-  scopeApply(tasks).forEach(r => {
-    if (!r.prazo) return;
-    const [y, m, d] = r.prazo.split("-").map(Number);
-    if (y === calYear && m - 1 === calMonth) {
-      if (!evMap[d]) evMap[d] = [];
-      const late = r.status !== "concluido" && r.prazo < today();
-      const cls = r.status === "concluido" ? "ev-pos" : (r.prioridade === "alta" || late) ? "ev-neg" : "ev-warn";
-      evMap[d].push({ id: r.id, cls, label: (r.code ? r.code + " " : "") + r.titulo });
-    }
+  const host = document.getElementById("calKanban");
+  if (!host) return;
+  const list = applyFilters(scopeApply(tasks)).filter(t => t.prazo);
+  const now = new Date();
+  const curIdx = now.getFullYear() * 12 + now.getMonth();
+  let minIdx = curIdx, maxIdx = curIdx + 5;
+  const byMonth = {};
+  list.forEach(t => {
+    const [y, m, d] = t.prazo.split("-").map(Number);
+    const idx = y * 12 + (m - 1);
+    if (idx < minIdx) minIdx = idx;
+    if (idx > maxIdx) maxIdx = idx;
+    (byMonth[idx] = byMonth[idx] || []).push({ t, d });
   });
+  if (maxIdx - minIdx > 23) maxIdx = minIdx + 23;   // limita a amplitude
 
   let html = "";
-  const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
-  for (let i = 0; i < totalCells; i++) {
-    const dayNum = i - firstDay + 1;
-    const isOther = dayNum < 1 || dayNum > daysInMonth;
-    const display = isOther ? (dayNum < 1 ? daysInPrev + dayNum : dayNum - daysInMonth) : dayNum;
-    const isToday = !isOther && dayNum === t.getDate() && calMonth === t.getMonth() && calYear === t.getFullYear();
-    const evs = !isOther && evMap[dayNum] ? evMap[dayNum] : [];
-    html += `<div class="cal-day${isOther ? " other" : ""}${isToday ? " today" : ""}">
-      <div class="cal-day-num">${display}</div>
-      <div class="cal-events">${evs.map(e =>
-        `<div class="cal-event ${e.cls}" title="${esc(e.label)}" onclick="openModal('${e.id}')">${esc(e.label)}</div>`).join("")}</div>
+  for (let idx = minIdx; idx <= maxIdx; idx++) {
+    const y = Math.floor(idx / 12), m = idx % 12;
+    const items = (byMonth[idx] || []).sort((a, b) => a.d - b.d);
+    const cards = items.length ? items.map(({ t, d }) => {
+      const late = t.status !== "concluido" && t.prazo < today();
+      const color = t.status === "concluido" ? "var(--green)"
+        : late ? "var(--red-bright)"
+        : t.relevancia === "critica" ? "var(--orange)"
+        : "var(--lblue)";
+      return `<div class="cal-mcard" style="border-left-color:${color}" onclick="openModal('${t.id}')">
+        <div class="cmc-day">${d}</div>
+        <div><div class="cmc-t">${esc(t.titulo)}</div><div class="cmc-m">${t.code ? t.code + " · " : ""}${STATUS_LABEL[t.status]}</div></div>
+      </div>`;
+    }).join("") : `<div class="cm-empty">Sem prazos</div>`;
+    html += `<div class="cal-month${idx === curIdx ? " current" : ""}">
+      <div class="cm-head"><span>${MESES[m]} ${y}</span>${items.length ? `<span class="cm-count">${items.length}</span>` : ""}</div>
+      <div class="cm-body">${cards}</div>
     </div>`;
   }
-  container.innerHTML = html;
+  host.innerHTML = html;
+  const curEl = host.querySelector(".cal-month.current");
+  if (curEl) host.scrollLeft = Math.max(0, curEl.offsetLeft - 12);
 }
 
 /* ══════════ LISTAGEM ══════════ */
@@ -1377,7 +1469,7 @@ function tblSort(field) {
 }
 
 function renderTable() {
-  let data = [...scopeApply(tasks)];
+  let data = applyFilters(scopeApply(tasks));
   if (tblActiveFilter === "alta") data = data.filter(t => t.prioridade === "alta" && t.status !== "concluido");
   if (tblActiveFilter === "andamento") data = data.filter(t => t.status === "andamento");
   if (tblActiveFilter === "atrasadas") data = data.filter(t => t.status !== "concluido" && t.prazo && t.prazo < today());
@@ -1407,22 +1499,6 @@ function renderTable() {
 }
 
 /* ══════════ KANBAN ══════════ */
-function getFilters() {
-  return {
-    busca: document.getElementById("fBusca").value.toLowerCase(),
-    setor: document.getElementById("fSetor").value,
-    solicitante: document.getElementById("fSolicitante").value,
-    tipo: document.getElementById("fTipo").value,
-    prioridade: document.getElementById("fPrioridade").value,
-    relevancia: document.getElementById("fRelevancia").value,
-  };
-}
-
-function limparFiltros() {
-  ["fBusca","fSetor","fSolicitante","fTipo","fPrioridade","fRelevancia"].forEach(id => document.getElementById(id).value = "");
-  renderBoard();
-}
-
 function fmtDate(d) {
   if (!d) return "";
   const [y, m, dd] = d.split("-");
@@ -1434,10 +1510,9 @@ function initials(name) {
 }
 
 function renderBoard() {
-  const f = getFilters();
   const board = document.getElementById("board");
 
-  const base = scopeApply(tasks);
+  const base = applyFilters(scopeApply(tasks));
 
   /* determina qual(is) card(s) está(ão) "pegando fogo" */
   const criticas = base.filter(t => t.relevancia === 'critica' && t.status !== 'concluido' && t.prazo);
@@ -1449,15 +1524,7 @@ function renderBoard() {
   );
 
   board.innerHTML = STATUS.map(col => {
-    const items = base.filter(t =>
-      t.status === col.id &&
-      (!f.busca || (t.titulo + " " + (t.descricao || "") + " " + (t.code || "")).toLowerCase().includes(f.busca)) &&
-      (!f.setor || t.setor === f.setor) &&
-      (!f.solicitante || t.solicitante === f.solicitante) &&
-      (!f.tipo || t.tipo === f.tipo) &&
-      (!f.prioridade || t.prioridade === f.prioridade) &&
-      (!f.relevancia || (t.relevancia || 'normal') === f.relevancia)
-    );
+    const items = base.filter(t => t.status === col.id);
     const cards = items.map(t => {
       const late = t.status !== "concluido" && t.prazo && t.prazo < today();
       const prog = t.progresso || 0;
@@ -1696,9 +1763,10 @@ function fillSelect(id, options, withEmpty) {
 
 function render() {
   renderPainel();
-  renderScopeToggles();
+  renderFilters();
   renderBoard();
   renderApprovals();
+  renderSolicitacoes();
   if (activeTab === "calendario") renderCalendar();
   if (activeTab === "listagem") renderTable();
   if (activeTab === "historico") renderHistorico();
@@ -1714,23 +1782,52 @@ function scopeApply(list) {
   }
   return list;
 }
-function renderScopeToggles() {
-  const html = isManagerView()
-    ? `<div class="scope-seg">
+function setScope(s) { taskScope = s; renderFilters(); renderActiveDataView(); }
+
+/* ══════════ FILTROS (compartilhados: Quadro · Calendário · Listagem) ══════════ */
+let FILT = { busca: '', setor: '', solicitante: '', tipo: '', prioridade: '', relevancia: '' };
+function applyFilters(list) {
+  const f = FILT, q = (f.busca || '').toLowerCase();
+  return list.filter(t =>
+    (!q || (t.titulo + ' ' + (t.descricao || '') + ' ' + (t.code || '')).toLowerCase().includes(q)) &&
+    (!f.setor || t.setor === f.setor) &&
+    (!f.solicitante || t.solicitante === f.solicitante) &&
+    (!f.tipo || t.tipo === f.tipo) &&
+    (!f.prioridade || t.prioridade === f.prioridade) &&
+    (!f.relevancia || (t.relevancia || 'normal') === f.relevancia)
+  );
+}
+function filterBarHTML() {
+  const f = FILT;
+  const sel = (cur, val, label) => `<option value="${esc(val)}"${cur === val ? ' selected' : ''}>${label}</option>`;
+  const setores = SETORES.map(s => sel(f.setor, s, esc(s))).join('');
+  const solics = SOLICITANTES.map(s => sel(f.solicitante, s, s)).join('');
+  const scope = isManagerView()
+    ? `<span class="scope-seg" style="margin-left:auto">
          <button class="${taskScope === 'minhas' ? 'active' : ''}" onclick="setScope('minhas')">Minhas</button>
          <button class="${taskScope === 'equipe' ? 'active' : ''}" onclick="setScope('equipe')">Equipe</button>
-       </div>` : '';
-  ['scopeQuadro', 'scopeCal', 'scopeLst'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.innerHTML = html;
-  });
+       </span>` : '';
+  return `
+    <input type="text" placeholder="🔍 Buscar demanda..." value="${f.busca ? esc(f.busca) : ''}" oninput="onFilter('busca', this.value)">
+    <select onchange="onFilter('setor', this.value)"><option value="">Todos os setores</option>${setores}</select>
+    <select onchange="onFilter('solicitante', this.value)"><option value="">Todos os solicitantes</option>${solics}</select>
+    <select onchange="onFilter('tipo', this.value)"><option value="">Todos os tipos</option>${sel(f.tipo, 'principal', 'Principal')}${sel(f.tipo, 'paralela', 'Paralela')}${sel(f.tipo, 'oportunidade', 'Oportunidade de melhoria')}</select>
+    <select onchange="onFilter('prioridade', this.value)"><option value="">Todas as prioridades</option>${sel(f.prioridade, 'alta', 'Alta')}${sel(f.prioridade, 'media', 'Média')}${sel(f.prioridade, 'baixa', 'Baixa')}</select>
+    <select onchange="onFilter('relevancia', this.value)"><option value="">Todas as relevâncias</option>${sel(f.relevancia, 'normal', 'Normal')}${sel(f.relevancia, 'alta', 'Alta')}${sel(f.relevancia, 'critica', '⚡ Crítica')}</select>
+    <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
+    ${scope}`;
 }
-function setScope(s) {
-  taskScope = s;
-  renderScopeToggles();
+function renderFilters() {
+  const html = filterBarHTML();
+  ['filtersQuadro', 'filtersCal', 'filtersLst'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = html; });
+}
+function onFilter(field, val) { FILT[field] = val; renderActiveDataView(); }
+function renderActiveDataView() {
   renderBoard();
   if (activeTab === 'calendario') renderCalendar();
   if (activeTab === 'listagem') renderTable();
 }
+function calScroll(dir) { const k = document.getElementById('calKanban'); if (k) k.scrollBy({ left: dir * 264, behavior: 'smooth' }); }
 
 /* ══════════ PAINEL (storytelling, por perfil) ══════════ */
 function firstName(n) { return ((n || '').trim().split(' ')[0]) || (n || ''); }
@@ -1820,6 +1917,7 @@ function renderPainel() {
   if (!el || !currentUser) return;
   const mine = myTasks();
   const ps = painelStats(mine);
+  const pendentes = mine.filter(t => t.status !== 'concluido').length;
   const manager = isManagerView();
   const nome = firstName(currentUser.nome || currentUser.email);
   const fire = onFireSet();
@@ -1873,6 +1971,11 @@ function renderPainel() {
   el.innerHTML = `
     <div class="greet"><h1>${greetingWord()}, ${esc(nome)}.</h1><p class="sentence">${sentence}</p></div>
     ${cmdHtml}
+    <div class="pend-hero">
+      <div class="ph-num">${pendentes}</div>
+      <div class="ph-txt"><div class="t">${pendentes === 1 ? 'demanda pendente' : 'demandas pendentes'}</div>
+        <div class="s">tudo que ainda não foi concluído</div></div>
+    </div>
     <span class="section-label">Suas demandas</span>
     ${cards}
     <div class="newbar"><button class="btn" onclick="openModal()">+ Nova demanda</button></div>
@@ -1882,15 +1985,11 @@ function renderPainel() {
     </div>`;
 }
 
-fillSelect("fSetor", SETORES, true);
-fillSelect("fSolicitante", SOLICITANTES, true);
 fillSelect("iSetor", SETORES, false);
 fillSelect("iSolicitante", SOLICITANTES, false);
-["fBusca","fSetor","fSolicitante","fTipo","fPrioridade","fRelevancia"].forEach(id =>
-  document.getElementById(id).addEventListener("input", renderBoard));
-document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") { closeModal(); closeSolicitar(); } });
 
-applyTheme(localStorage.getItem("theme") || "dark");
+applyTheme(localStorage.getItem("theme") || "light");
 
 /* migração: demandas locais antigas sem código/progresso */
 {
@@ -1974,7 +2073,7 @@ function renderBell() {
   badge.textContent = unread > 9 ? "9+" : unread;
   const list = document.getElementById("bellList");
   if (!notifs.length) { list.innerHTML = `<div class="bell-empty">Nenhuma notificação ainda.</div>`; return; }
-  const ico = { enviada: "📤", aprovacao_solicitada: "🔔", aprovada: "✅", reprovada: "⛔", info: "ℹ️" };
+  const ico = { enviada: "📤", aprovacao_solicitada: "🔔", aprovada: "✅", reprovada: "⛔", info: "ℹ️", solicitacao_recebida: "📨", solicitacao_aceita: "✅", solicitacao_recusada: "⛔" };
   list.innerHTML = notifs.map(n => `<div class="notif ${n.lida ? "" : "unread"} n-${n.tipo}">
     <div class="n-ico">${ico[n.tipo] || "•"}</div>
     <div class="n-body"><div class="n-msg">${esc(n.mensagem)}</div><div class="n-time">${fmtNotifTime(n.created_at)}</div></div>
@@ -2045,6 +2144,100 @@ async function decidirAprovacao(id, aprovar) {
   } catch (e) { alert("Falha ao registrar decisão: " + (e.message || e)); }
 }
 
+/* ══════════ SOLICITAÇÕES (pedir demanda a outra pessoa) ══════════ */
+let solicitacoes = [];
+function nomeDe(uid) { const p = PROFILES_BY_ID[uid]; return p ? p.nome : "—"; }
+async function loadSolicitacoes() {
+  if (!sb) return;
+  try {
+    const { data, error } = await sb.from("solicitacoes").select("*").order("created_at", { ascending: false });
+    if (error) throw error;
+    solicitacoes = data || [];
+    renderSolicitacoes();
+  } catch (e) { console.warn("Falha ao carregar solicitações:", e.message || e); }
+}
+function solicPendentesRecebidas() {
+  if (!currentUser) return [];
+  return solicitacoes.filter(s => s.status === "pendente" && String(s.para_user_id) === String(currentUser.id));
+}
+function openSolicitar() {
+  document.getElementById("solicitarForm").reset();
+  const me = currentUser && currentUser.id;
+  const people = Object.values(PROFILES_BY_ID)
+    .filter(p => String(p.id) !== String(me))
+    .sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
+  document.getElementById("sPara").innerHTML = `<option value="">Selecione a pessoa...</option>`
+    + people.map(p => `<option value="${p.id}">${esc(p.nome)}${p.matricula ? " · " + p.matricula : ""}</option>`).join("");
+  document.getElementById("sSetor").innerHTML = SETORES.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("");
+  document.getElementById("solicitarOverlay").classList.add("open");
+}
+function closeSolicitar() { document.getElementById("solicitarOverlay").classList.remove("open"); }
+async function enviarSolicitacao(e) {
+  e.preventDefault();
+  const para = document.getElementById("sPara").value;
+  if (!para) { alert("Escolha para quem enviar."); return; }
+  if (!sb) { alert("Sem conexão com o servidor."); return; }
+  const btn = document.getElementById("sBtn"); btn.disabled = true; btn.textContent = "Enviando...";
+  try {
+    const { error } = await sb.rpc("solicitar_demanda", {
+      p_para: para,
+      p_titulo: document.getElementById("sTitulo").value.trim(),
+      p_descricao: document.getElementById("sDescricao").value.trim(),
+      p_setor: document.getElementById("sSetor").value,
+      p_tipo: document.getElementById("sTipo").value,
+      p_prioridade: document.getElementById("sPrioridade").value,
+      p_relevancia: document.getElementById("sRelevancia").value,
+      p_prazo: document.getElementById("sPrazo").value || null,
+    });
+    if (error) throw error;
+    showToast("Solicitação enviada 📨", "A pessoa foi notificada.");
+    closeSolicitar();
+    await loadSolicitacoes();
+  } catch (err) { alert("Falha ao enviar: " + (err.message || err)); }
+  btn.disabled = false; btn.textContent = "Enviar solicitação";
+}
+async function responderSolicitacao(id, aceitar) {
+  let obs = null;
+  if (!aceitar) { obs = prompt("Motivo da recusa (opcional):"); if (obs === null) return; }
+  else { if (!confirm("Aceitar esta solicitação? Ela virará uma demanda sua.")) return; }
+  if (!sb) { alert("Sem conexão com o servidor."); return; }
+  try {
+    const { error } = await sb.rpc("responder_solicitacao", { p_id: id, p_aceitar: aceitar, p_obs: obs });
+    if (error) throw error;
+    showToast(aceitar ? "Aceita ✅" : "Recusada ⛔", aceitar ? "Virou uma demanda sua." : "Solicitante notificado.");
+    await loadSolicitacoes();
+    await loadFromSupabase();
+    await loadNotificacoes();
+  } catch (e) { alert("Falha: " + (e.message || e)); }
+}
+function renderSolicitacoes() {
+  const rec = document.getElementById("solicRecebidas");
+  const env = document.getElementById("solicEnviadas");
+  const cnt = document.getElementById("solicTabCount");
+  if (!rec || !env) return;
+  const me = currentUser && currentUser.id;
+  const recebidas = solicPendentesRecebidas();
+  if (cnt) cnt.textContent = recebidas.length ? `(${recebidas.length})` : "";
+  rec.innerHTML = recebidas.length ? recebidas.map(s => {
+    const rel = s.relevancia || "normal";
+    return `<div class="appr-card">
+      <div class="ac-top"><h4>${esc(s.titulo)}</h4><span class="tag rel-${rel}">${rel === "critica" ? "⚡ " : ""}${RELEVANCIA_LABEL[rel]}</span></div>
+      <div class="ac-meta"><span>De: <b>${esc(nomeDe(s.de_user_id))}</b></span>${s.setor ? `<span>Setor: <b>${esc(s.setor)}</b></span>` : ""}${s.prazo ? `<span>Prazo sugerido: <b>${fmtDate(s.prazo)}</b></span>` : ""}</div>
+      ${s.descricao ? `<div style="font-size:.8rem;color:var(--text-dim);margin-bottom:14px">${esc(s.descricao)}</div>` : ""}
+      <div class="ac-actions"><button class="btn-approve" onclick="responderSolicitacao(${s.id}, true)">✓ Aceitar</button><button class="btn-reject" onclick="responderSolicitacao(${s.id}, false)">✗ Recusar</button></div>
+    </div>`;
+  }).join("") : `<div class="appr-empty">Nenhuma solicitação pendente. 🎉</div>`;
+
+  const enviadas = solicitacoes.filter(s => String(s.de_user_id) === String(me)).slice(0, 30);
+  env.innerHTML = enviadas.length ? enviadas.map(s => {
+    const st = s.status === "aceita" ? `<span class="tag st-concluido">Aceita</span>`
+      : s.status === "recusada" ? `<span class="tag rel-critica">Recusada</span>`
+      : `<span class="tag st-aguardando">Pendente</span>`;
+    return `<div class="li"><span class="ava">${initials(nomeDe(s.para_user_id))}</span>
+      <div class="lbody"><div class="lt">${esc(s.titulo)}</div><div class="lm">para ${esc(nomeDe(s.para_user_id))}${s.status === "recusada" && s.obs ? " · " + esc(s.obs) : ""}</div></div>${st}</div>`;
+  }).join("") : `<div class="empty-soft">Você ainda não enviou solicitações.</div>`;
+}
+
 async function bootApp(user) {
   showUser(user);
   document.body.classList.remove("locked");
@@ -2055,6 +2248,7 @@ async function bootApp(user) {
     render();
     await loadFromSupabase();
     await loadNotificacoes();
+    await loadSolicitacoes();
   }
 }
 
