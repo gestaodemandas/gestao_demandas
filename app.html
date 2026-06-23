@@ -873,9 +873,12 @@
 
   <!-- ── TAB: SOLICITAÇÕES ── -->
   <div id="tab-solicitacoes" class="tab-content">
-    <div style="margin-bottom:14px">
-      <div class="tbl-title" style="font-size:1rem">Solicitações</div>
-      <div style="font-size:.78rem;color:var(--text-dim);margin-top:4px">Demandas que pediram a você (aceite ou recuse) e o que você solicitou a outras pessoas.</div>
+    <div style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+      <div>
+        <div class="tbl-title" style="font-size:1rem">Solicitações</div>
+        <div style="font-size:.78rem;color:var(--text-dim);margin-top:4px">Demandas que pediram a você (aceite ou recuse) e o que você solicitou a outras pessoas.</div>
+      </div>
+      <span id="solicScope"></span>
     </div>
     <span class="section-label" style="margin-top:0">Recebidas — aguardando sua resposta</span>
     <div id="solicRecebidas"></div>
@@ -889,13 +892,14 @@
       <div class="tbl-header">
         <div>
           <div class="tbl-title">Histórico de Movimentações</div>
-          <div style="font-size:.75rem;color:var(--text-dim);margin-top:3px">Log de criações, atualizações e movimentações nas demandas</div>
+          <div style="font-size:.75rem;color:var(--text-dim);margin-top:3px">Log geral: criações, atualizações, aprovações e solicitações</div>
         </div>
+        <span id="histScope"></span>
       </div>
       <div class="tbl-scroll">
         <table>
           <thead>
-            <tr><th>Data/Hora</th><th>Demanda</th><th>Ação</th><th>De</th><th>Para</th></tr>
+            <tr><th>Data/Hora</th><th>Quem</th><th>Demanda</th><th>Ação</th><th>De</th><th>Para</th></tr>
           </thead>
           <tbody id="histBody"></tbody>
         </table>
@@ -1193,6 +1197,7 @@ async function loadFromSupabase() {
         return {
           ts: `${p(d.getDate())}/${p(d.getMonth()+1)}/${String(d.getFullYear()).slice(2)} ${p(d.getHours())}:${p(d.getMinutes())}`,
           code: l.demanda_code || "", titulo: l.titulo, acao: l.acao, de: l.de || "—", para: l.para || "—",
+          userId: l.user_id || null, setor: l.setor || null, setorDono: l.setor_dono || null,
         };
       });
     }
@@ -1248,13 +1253,23 @@ async function sbLog(entry) {
     await sb.from("demandas_log").insert([{
       demanda_code: entry.code || null, titulo: entry.titulo,
       acao: entry.acao, de: entry.de === "—" ? null : entry.de, para: entry.para === "—" ? null : entry.para,
+      user_id: entry.userId || null, setor: entry.setor || null, setor_dono: entry.setorDono || null,
     }]);
   } catch (e) { /* log local já garante o registro */ }
 }
 
 /* ══════════ HISTÓRICO ══════════ */
+// `task` pode ser uma demanda real ou um objeto-evento {code,titulo,setor,userId}
+// (usado p/ registrar solicitações/aprovações). userId = DONO/alvo da demanda.
 function logAction(task, acao, de, para) {
-  const entry = { ts: nowStr(), code: task.code || "", titulo: task.titulo, acao, de: de || "—", para: para || "—" };
+  const donoSetor = (task.userId && PROFILES_BY_ID[task.userId] && PROFILES_BY_ID[task.userId].setor) || null;
+  const entry = {
+    ts: nowStr(), code: task.code || "", titulo: task.titulo, acao,
+    de: de || "—", para: para || "—",
+    userId: currentUser ? currentUser.id : null,          // ATOR (quem fez a ação)
+    setor: task.setor || null,                            // setor da demanda/evento
+    setorDono: donoSetor,                                 // setor do dono/alvo
+  };
   histLog.unshift(entry);
   if (histLog.length > 500) histLog.length = 500;
   sbLog(entry);
@@ -1263,10 +1278,19 @@ function logAction(task, acao, de, para) {
 function renderHistorico() {
   const body = document.getElementById("histBody");
   const empty = document.getElementById("histEmpty");
-  if (!histLog.length) { body.innerHTML = ""; empty.style.display = "block"; return; }
+  const scopeEl = document.getElementById("histScope");
+  // Toggle Minhas/Setor só para gestor+ (perfis ≥ gestor)
+  if (scopeEl) scopeEl.innerHTML = isManagerView() ? scopeSeg() : "";
+  // Gestor em "Minhas" → só as ações dele; demais casos → tudo que a RLS entrega
+  let rows = histLog;
+  if (isManagerView() && taskScope === 'minhas') {
+    rows = rows.filter(h => String(h.userId) === String(currentUser.id));
+  }
+  if (!rows.length) { body.innerHTML = ""; empty.style.display = "block"; return; }
   empty.style.display = "none";
-  body.innerHTML = histLog.map(h => `<tr style="cursor:default">
+  body.innerHTML = rows.map(h => `<tr style="cursor:default">
     <td style="white-space:nowrap;font-size:.73rem;color:var(--text-dim)">${h.ts}</td>
+    <td style="font-size:.78rem">${esc(nomeDe(h.userId))}</td>
     <td style="font-weight:600">${h.code ? h.code + " · " : ""}${esc(h.titulo)}</td>
     <td>${esc(h.acao)}</td>
     <td>${fmtHistVal(h.de)}</td>
@@ -1711,6 +1735,8 @@ async function saveTask(e) {
           p_confidencial: ehGestor && document.getElementById("iConfidencial").checked,
         });
         if (error) throw error;
+        logAction({ titulo: document.getElementById("iTitulo").value.trim(), setor: alvo.setor || null, userId: para },
+                   "Solicitação enviada", currentUser && currentUser.nome, nomeDe(para));
         showToast("Solicitação enviada 📨", nomeDe(para) + " foi notificado(a).");
         closeModal();
         await loadSolicitacoes();
@@ -1768,6 +1794,7 @@ async function saveTask(e) {
       try {
         const { error } = await sb.rpc("solicitar_aprovacao", { p_demanda: task.id });
         if (error) throw error;
+        logAction(task, "Aprovação solicitada", currentUser && currentUser.nome, "gestor");
         showToast("Aprovação solicitada 🔔", "Seu gestor foi notificado.");
       } catch (err) {
         alert("Falha ao solicitar aprovação: " + (err.message || err));
@@ -1826,7 +1853,14 @@ function scopeApply(list) {
   }
   return list;   // 'equipe' (setor) ou perfil individual → o que a RLS já entrega
 }
-function setScope(s) { taskScope = s; renderFilters(); renderActiveDataView(); }
+function setScope(s) { taskScope = s; render(); }
+function canToggleScope() { return !!(currentUser && currentUser.perfil !== 'individual'); }
+function scopeSeg(extraStyle) {
+  return `<span class="scope-seg"${extraStyle ? ` style="${extraStyle}"` : ''}>
+      <button class="${taskScope === 'minhas' ? 'active' : ''}" onclick="setScope('minhas')">Minhas</button>
+      <button class="${taskScope === 'equipe' ? 'active' : ''}" onclick="setScope('equipe')">Setor</button>
+    </span>`;
+}
 
 /* ══════════ FILTROS (compartilhados: Quadro · Calendário · Listagem) ══════════ */
 let FILT = { busca: '', setor: '', prioridade: '' };
@@ -1842,12 +1876,7 @@ function filterBarHTML() {
   const f = FILT;
   const sel = (cur, val, label) => `<option value="${esc(val)}"${cur === val ? ' selected' : ''}>${label}</option>`;
   const setores = SETORES.map(s => sel(f.setor, s, esc(s))).join('');
-  const podeAlternar = currentUser && currentUser.perfil !== 'individual';
-  const scope = podeAlternar
-    ? `<span class="scope-seg" style="margin-left:auto">
-         <button class="${taskScope === 'minhas' ? 'active' : ''}" onclick="setScope('minhas')">Minhas</button>
-         <button class="${taskScope === 'equipe' ? 'active' : ''}" onclick="setScope('equipe')">Setor</button>
-       </span>` : '';
+  const scope = canToggleScope() ? scopeSeg('margin-left:auto') : '';
   return `
     <input type="text" placeholder="🔍 Buscar demanda..." value="${f.busca ? esc(f.busca) : ''}" oninput="onFilter('busca', this.value)">
     <select onchange="onFilter('setor', this.value)"><option value="">Todos os setores</option>${setores}</select>
@@ -1954,7 +1983,8 @@ function cobrarChip(r) {
 function renderPainel() {
   const el = document.getElementById('painelView');
   if (!el || !currentUser) return;
-  const mine = myTasks();
+  const setorView = canToggleScope() && taskScope === 'equipe';
+  const mine = canToggleScope() ? scopeApply(tasks) : myTasks();  // 'minhas' → próprias; 'equipe' → setor (RLS)
   const ps = painelStats(mine);
   const pendentes = mine.filter(t => t.status !== 'concluido').length;
   const manager = isManagerView();
@@ -2008,6 +2038,7 @@ function renderPainel() {
   }
 
   el.innerHTML = `
+    ${canToggleScope() ? `<div style="display:flex;justify-content:flex-end;margin-bottom:6px">${scopeSeg()}</div>` : ''}
     <div class="greet"><h1>${greetingWord()}, ${esc(nome)}.</h1><p class="sentence">${sentence}</p></div>
     ${cmdHtml}
     <div class="pend-hero">
@@ -2015,11 +2046,11 @@ function renderPainel() {
       <div class="ph-txt"><div class="t">${pendentes === 1 ? 'demanda pendente' : 'demandas pendentes'}</div>
         <div class="s">tudo que ainda não foi concluído</div></div>
     </div>
-    <span class="section-label">Suas demandas</span>
+    <span class="section-label">${setorView ? 'Demandas do setor' : 'Suas demandas'}</span>
     ${cards}
     <div class="newbar"><button class="btn" onclick="openModal()">+ Nova demanda</button></div>
     <div class="p-row2">
-      <div class="p-block"><span class="pb-label">Foco de hoje${manager ? ' — suas demandas' : ''}</span>${focoHtml}</div>
+      <div class="p-block"><span class="pb-label">Foco de hoje${setorView ? ' — setor' : (manager ? ' — suas demandas' : '')}</span>${focoHtml}</div>
       ${rightBlock}
     </div>`;
 }
@@ -2225,6 +2256,9 @@ async function decidirAprovacao(id, aprovar) {
   try {
     const { error } = await sb.rpc("decidir_aprovacao", { p_demanda: id, p_aprovar: aprovar, p_obs: obs });
     if (error) throw error;
+    const _dem = tasks.find(x => String(x.id) === String(id));
+    if (_dem) logAction(_dem, aprovar ? "Aprovação aprovada" : "Aprovação reprovada",
+                        currentUser && currentUser.nome, ownerName(_dem.userId));
     showToast(aprovar ? "Aprovada ✅" : "Reprovada ⛔", "Decisão registrada e solicitante notificado.");
     await loadFromSupabase();
     await loadNotificacoes();
@@ -2234,6 +2268,14 @@ async function decidirAprovacao(id, aprovar) {
 /* ══════════ SOLICITAÇÕES (pedir demanda a outra pessoa) ══════════ */
 let solicitacoes = [];
 function nomeDe(uid) { const p = PROFILES_BY_ID[uid]; return p ? p.nome : "—"; }
+// uuids de quem responde diretamente ao usuário logado (gestor_matricula = minha matrícula)
+function lideradosIds() {
+  if (!currentUser) return new Set();
+  const myMat = String((PROFILES_BY_ID[currentUser.id] && PROFILES_BY_ID[currentUser.id].matricula) || currentUser.matricula || "");
+  return new Set(Object.values(PROFILES_BY_ID)
+    .filter(p => p.gestor_matricula != null && String(p.gestor_matricula) === myMat)
+    .map(p => p.id));
+}
 async function loadSolicitacoes() {
   if (!sb) return;
   try {
@@ -2255,6 +2297,10 @@ async function responderSolicitacao(id, aceitar) {
   try {
     const { error } = await sb.rpc("responder_solicitacao", { p_id: id, p_aceitar: aceitar, p_obs: obs });
     if (error) throw error;
+    const _s = solicitacoes.find(x => String(x.id) === String(id));
+    if (_s) logAction({ titulo: _s.titulo, setor: _s.setor || null, userId: _s.para_user_id },
+                      aceitar ? "Solicitação aceita" : "Solicitação recusada",
+                      currentUser && currentUser.nome, nomeDe(_s.de_user_id));
     showToast(aceitar ? "Aceita ✅" : "Recusada ⛔", aceitar ? "Virou uma demanda sua." : "Solicitante notificado.");
     await loadSolicitacoes();
     await loadFromSupabase();
@@ -2265,28 +2311,48 @@ function renderSolicitacoes() {
   const rec = document.getElementById("solicRecebidas");
   const env = document.getElementById("solicEnviadas");
   const cnt = document.getElementById("solicTabCount");
+  const scopeEl = document.getElementById("solicScope");
   if (!rec || !env) return;
   const me = currentUser && currentUser.id;
-  const recebidas = solicPendentesRecebidas();
-  if (cnt) cnt.textContent = recebidas.length ? `(${recebidas.length})` : "";
+  const manager = isManagerView();
+  if (scopeEl) scopeEl.innerHTML = manager ? scopeSeg() : "";   // toggle só p/ gestor+
+  const teamView = manager && taskScope === 'equipe';           // "Setor" = liderados diretos
+  const lid = teamView ? lideradosIds() : new Set();
+
+  // O badge sempre reflete o que aguarda MINHA resposta
+  const minhasPend = solicPendentesRecebidas();
+  if (cnt) cnt.textContent = minhasPend.length ? `(${minhasPend.length})` : "";
+
+  // Recebidas pendentes: as minhas (acionáveis) + (se Setor) as dos liderados (read-only)
+  const recebidas = solicitacoes.filter(s => s.status === "pendente" &&
+    (String(s.para_user_id) === String(me) || lid.has(s.para_user_id)));
   rec.innerHTML = recebidas.length ? recebidas.map(s => {
     const pr = s.prioridade || "media";
+    const ehMinha = String(s.para_user_id) === String(me);
+    const acoes = ehMinha
+      ? `<div class="ac-actions"><button class="btn-approve" onclick="responderSolicitacao(${s.id}, true)">✓ Aceitar</button><button class="btn-reject" onclick="responderSolicitacao(${s.id}, false)">✗ Recusar</button></div>`
+      : `<div style="font-size:.75rem;color:var(--text-dim)">Para <b>${esc(nomeDe(s.para_user_id))}</b> · aguardando resposta dele(a)</div>`;
     return `<div class="appr-card">
       <div class="ac-top"><h4>${esc(s.titulo)}${s.confidencial ? ' 🔒' : ''}</h4>${pr === "critica" ? '<span class="tag pri-critica">⚡ Prioridade</span>' : ''}</div>
       <div class="ac-meta"><span>De: <b>${esc(nomeDe(s.de_user_id))}</b></span>${s.setor ? `<span>Setor: <b>${esc(s.setor)}</b></span>` : ""}${s.prazo ? `<span>Prazo sugerido: <b>${fmtDate(s.prazo)}</b></span>` : ""}</div>
       ${s.descricao ? `<div style="font-size:.8rem;color:var(--text-dim);margin-bottom:14px">${esc(s.descricao)}</div>` : ""}
-      <div class="ac-actions"><button class="btn-approve" onclick="responderSolicitacao(${s.id}, true)">✓ Aceitar</button><button class="btn-reject" onclick="responderSolicitacao(${s.id}, false)">✗ Recusar</button></div>
+      ${acoes}
     </div>`;
   }).join("") : `<div class="appr-empty">Nenhuma solicitação pendente. 🎉</div>`;
 
-  const enviadas = solicitacoes.filter(s => String(s.de_user_id) === String(me)).slice(0, 30);
+  // Enviadas: as minhas + (se Setor) as dos liderados
+  const enviadas = solicitacoes
+    .filter(s => String(s.de_user_id) === String(me) || lid.has(s.de_user_id))
+    .slice(0, 40);
   env.innerHTML = enviadas.length ? enviadas.map(s => {
     const st = s.status === "aceita" ? `<span class="tag st-concluido">Aceita</span>`
       : s.status === "recusada" ? `<span class="tag rel-critica">Recusada</span>`
       : `<span class="tag st-aguardando">Pendente</span>`;
+    const deOutro = String(s.de_user_id) !== String(me);
+    const linha = deOutro ? `${esc(nomeDe(s.de_user_id))} → ${esc(nomeDe(s.para_user_id))}` : `para ${esc(nomeDe(s.para_user_id))}`;
     return `<div class="li"><span class="ava">${initials(nomeDe(s.para_user_id))}</span>
-      <div class="lbody"><div class="lt">${esc(s.titulo)}</div><div class="lm">para ${esc(nomeDe(s.para_user_id))}${s.status === "recusada" && s.obs ? " · " + esc(s.obs) : ""}</div></div>${st}</div>`;
-  }).join("") : `<div class="empty-soft">Você ainda não enviou solicitações.</div>`;
+      <div class="lbody"><div class="lt">${esc(s.titulo)}</div><div class="lm">${linha}${s.status === "recusada" && s.obs ? " · " + esc(s.obs) : ""}</div></div>${st}</div>`;
+  }).join("") : `<div class="empty-soft">Nenhuma solicitação enviada.</div>`;
 }
 
 async function bootApp(user) {
