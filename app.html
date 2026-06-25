@@ -984,7 +984,7 @@
             <option value="concluido">Concluído</option>
           </select>
         </div>
-        <div class="full owner-only">
+        <div class="full owner-only" id="apprWrap">
           <label>Aprovação do gestor</label>
           <div class="appr-box" id="apprBox">
             <input type="checkbox" id="iAprovacao" onchange="onAprovacaoToggle()">
@@ -1720,6 +1720,8 @@ function onParaChange() {
   btn.disabled = !has;
   btn.textContent = (!has || isSelf) ? "Salvar" : "Enviar solicitação";
   setOwnerOnly(isSelf);
+  // bloco de aprovação aparece sempre que há um destinatário (próprio ou colega)
+  document.getElementById("apprWrap").style.display = has ? "" : "none";
   setGestorOnly(isGestorPerfil(currentUser && currentUser.perfil));
   fillAutoBlock(para);
   const hint = document.getElementById("iParaHint");
@@ -1790,6 +1792,9 @@ async function saveTask(e) {
     if (!para) { alert("Escolha para quem é a demanda."); return; }
     if (currentUser && String(para) !== String(currentUser.id)) {
       if (!sb) { alert("Sem conexão com o servidor."); return; }
+      const querAprov = document.getElementById("iAprovacao").checked && !document.getElementById("iAprovacao").disabled;
+      const aprovadorSolic = document.getElementById("iAprovador").value;
+      if (querAprov && !aprovadorSolic) { alert("Escolha o gestor que vai aprovar a demanda."); return; }
       const btn = document.getElementById("saveBtn"); btn.disabled = true; btn.textContent = "Enviando...";
       try {
         const alvo = PROFILES_BY_ID[para] || {};
@@ -1802,6 +1807,7 @@ async function saveTask(e) {
           p_prioridade: document.getElementById("iPrioridade").checked ? 'critica' : 'normal',
           p_prazo: document.getElementById("iPrazo").value || null,
           p_confidencial: (currentUser && currentUser.perfil !== 'individual') && document.getElementById("iConfidencial").checked,
+          p_aprovador: querAprov ? aprovadorSolic : null,
         });
         if (error) throw error;
         logAction({ titulo: document.getElementById("iTitulo").value.trim(), setor: alvo.setor || null, userId: para },
