@@ -931,6 +931,7 @@
 <div class="overlay" id="overlay" onclick="if(event.target===this) closeModal()">
   <div class="modal">
     <h2 id="modalTitle">Nova demanda</h2>
+    <div id="roBanner" style="display:none;margin:0 0 14px;padding:10px 12px;border-radius:8px;background:var(--lblue-soft,rgba(95,176,232,.12));color:var(--lblue,#5fb0e8);font-size:.82rem;border:1px solid rgba(95,176,232,.3)">👁 Somente leitura — você está acompanhando uma demanda que solicitou. Quem edita é o responsável.</div>
     <form id="taskForm" onsubmit="saveTask(event)">
       <div class="full" id="iParaRow" style="margin-bottom:16px">
         <label>Para quem</label>
@@ -964,12 +965,12 @@
           <label>Prazo</label>
           <input type="date" id="iPrazo">
         </div>
-        <div class="full gestor-only" id="confRow">
+        <div class="full" id="confRow" style="display:none">
           <div class="appr-box">
-            <input type="checkbox" id="iConfidencial">
+            <input type="checkbox" id="iConfidencial" onchange="confirmarConfidencial(this)">
             <div class="ab-body">
               <div class="ab-title">Confidencial</div>
-              <div class="ab-sub">Oculta a demanda dos demais — só gestores do setor e a pessoa atribuída conseguem ver.</div>
+              <div class="ab-sub">Oculta a demanda dos demais — só você, o seu gestor e a pessoa atribuída conseguem ver.</div>
             </div>
           </div>
         </div>
@@ -986,10 +987,11 @@
         <div class="full owner-only">
           <label>Aprovação do gestor</label>
           <div class="appr-box" id="apprBox">
-            <input type="checkbox" id="iAprovacao">
+            <input type="checkbox" id="iAprovacao" onchange="onAprovacaoToggle()">
             <div class="ab-body">
-              <div class="ab-title">Solicitar aprovação de <span id="apprGestorNome">—</span></div>
-              <div class="ab-sub">Use quando a demanda envolver dado sensível ou exigir autorização. A demanda fica retida até a decisão do gestor.</div>
+              <div class="ab-title">Solicitar aprovação</div>
+              <div class="ab-sub">Use quando a demanda exigir autorização. Escolha o gestor com alçada — a demanda fica retida até a decisão dele.</div>
+              <select id="iAprovador" style="margin-top:8px;display:none"></select>
             </div>
           </div>
           <div class="appr-status-info" id="apprStatusInfo" style="display:none"></div>
@@ -1498,7 +1500,7 @@ function tblSort(field) {
 
 function renderTable() {
   let data = applyFilters(scopeApply(tasks));
-  if (tblActiveFilter === "alta") data = data.filter(t => t.prioridade === "alta" && t.status !== "concluido");
+  if (tblActiveFilter === "alta") data = data.filter(t => t.prioridade === "critica" && t.status !== "concluido");
   if (tblActiveFilter === "andamento") data = data.filter(t => t.status === "andamento");
   if (tblActiveFilter === "atrasadas") data = data.filter(t => t.status !== "concluido" && t.prazo && t.prazo < today());
   if (tblActiveFilter === "concluido") data = data.filter(t => t.status === "concluido");
@@ -1554,7 +1556,7 @@ function renderBoard() {
         t.aprovacao === 'reprovada' ? `<div class="appr-badge reprovada">⛔ Aprovação reprovada</div>` :
         t.aprovacao === 'aprovada'  ? `<div class="appr-badge aprovada">✓ Aprovada</div>` : '';
       const confBadge = t.confidencial ? `<span class="tag conf-tag">🔒 Confidencial</span>` : '';
-      const showOwner = isManagerView() && t.userId && String(t.userId) !== String(currentUser && currentUser.id);
+      const showOwner = (isManagerView() || taskScope === 'solicitadas') && t.userId && String(t.userId) !== String(currentUser && currentUser.id);
       const ownerNm = showOwner ? ownerName(t.userId) : '';
       return `<div class="task${critica ? ' rel-critica' : ''}${isOnFire ? ' on-fire' : ''}${isPendApr ? ' aguardando-aprov' : ''}" draggable="true" data-id="${t.id}" onclick="openModal('${t.id}')">
         ${critica ? '<div class="t-critica-bar"></div>' : ''}
@@ -1650,7 +1652,12 @@ function openModal(id) {
     document.getElementById("iAutoSetorDem").textContent = t.setorDemandante || setorDono || "—";
     document.getElementById("iAutoDemandante").textContent = t.solicitante || "—";
     setupApprovalBox(t);
+    // somente leitura: não sou dono e não sou gestor/master/dev → acompanhamento (ex.: demanda que solicitei)
+    const meId = currentUser && currentUser.id;
+    const readOnly = String(t.userId) !== String(meId) && !isManagerView();
+    applyReadOnly(readOnly);
   } else {
+    applyReadOnly(false);
     paraRow.style.display = "block";
     const me = currentUser && currentUser.id;
     const meNome = currentUser ? (currentUser.nome || "Você") : "Você";
@@ -1664,8 +1671,20 @@ function openModal(id) {
     setupApprovalBox(null);
     onParaChange();
   }
+  // Confidencial disponível para "usuário pra cima" (todos menos perfil individual)
+  document.getElementById("confRow").style.display =
+    (currentUser && currentUser.perfil !== 'individual') ? '' : 'none';
   document.getElementById("overlay").classList.add("open");
   (id ? document.getElementById("iTitulo") : document.getElementById("iPara")).focus();
+}
+function confirmarConfidencial(cb) {
+  if (!cb.checked) return;
+  const ok = confirm(
+    "Ao marcar como Confidencial, esta demanda passará a ser vista apenas por você, " +
+    "pelo seu gestor e pela pessoa para quem ela foi atribuída. " +
+    "Os demais colegas — inclusive do seu setor — não conseguirão vê-la.\n\nDeseja continuar?"
+  );
+  if (!ok) cb.checked = false;
 }
 
 function setOwnerOnly(show) {
@@ -1673,6 +1692,17 @@ function setOwnerOnly(show) {
 }
 function setGestorOnly(show) {
   document.querySelectorAll(".gestor-only").forEach(el => el.style.display = show ? "block" : "none");
+}
+function applyReadOnly(ro) {
+  const form = document.getElementById("taskForm");
+  form.querySelectorAll("input, textarea, select").forEach(el => {
+    if (el.id === "iAprovacao" || el.id === "iAprovador") return; // travados pelo setupApprovalBox (não-dono / pendente)
+    el.disabled = ro;
+  });
+  document.getElementById("saveBtn").style.display = ro ? "none" : "";
+  document.getElementById("btnDelete").style.display = ro ? "none" : (editingId ? "inline-block" : "none");
+  const banner = document.getElementById("roBanner");
+  if (banner) banner.style.display = ro ? "block" : "none";
 }
 function fillAutoBlock(paraId) {
   const alvo = paraId ? PROFILES_BY_ID[paraId] : null;
@@ -1696,31 +1726,52 @@ function onParaChange() {
   if (hint) hint.style.display = has ? "none" : "block";
 }
 
+function gestoresSelecionaveis() {
+  const meId = currentUser && currentUser.id;
+  return Object.values(PROFILES_BY_ID)
+    .filter(p => (p.perfil === 'gestor' || p.perfil === 'gestor_master') && String(p.id) !== String(meId))
+    .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+}
+function onAprovacaoToggle() {
+  const chk = document.getElementById("iAprovacao");
+  const sel = document.getElementById("iAprovador");
+  sel.style.display = chk.checked ? "block" : "none";
+  if (chk.checked && !sel.disabled) sel.focus();
+}
 function setupApprovalBox(t) {
   const box = document.getElementById("apprBox");
   const chk = document.getElementById("iAprovacao");
   const info = document.getElementById("apprStatusInfo");
-  const gNomeEl = document.getElementById("apprGestorNome");
-  const g = (currentUser && currentUser.gestor) ? rosterByMat(currentUser.gestor) : null;
+  const sel = document.getElementById("iAprovador");
   chk.checked = false; chk.disabled = false; box.classList.remove("disabled"); info.style.display = "none";
-  gNomeEl.textContent = g ? g.nome : "(sem gestor imediato)";
 
-  // sem gestor (master/admin) → não há para quem solicitar
-  if (!g) { box.classList.add("disabled"); chk.disabled = true; }
+  // dropdown com todos os gestores (exceto eu)
+  const gestores = gestoresSelecionaveis();
+  sel.innerHTML = `<option value="">Selecione o gestor...</option>` +
+    gestores.map(g => `<option value="${g.id}">${esc(g.nome)}${g.setor ? ' · ' + esc(g.setor) : ''}</option>`).join("");
+  sel.disabled = false; sel.style.display = "none";
 
-  // editando demanda de outra pessoa (gestor) → não pode solicitar em nome dela
+  // default: gestor direto do solicitante (se existir e for gestor)
+  const gMat = currentUser && currentUser.gestor;
+  const direto = gMat ? Object.values(PROFILES_BY_ID).find(p => String(p.matricula) === String(gMat)) : null;
+  if (direto && (direto.perfil === 'gestor' || direto.perfil === 'gestor_master')) sel.value = String(direto.id);
+
+  // editando demanda de outra pessoa → não pode solicitar em nome dela
   const isOwner = !t || !t.userId || (currentUser && String(t.userId) === String(currentUser.id));
-  if (t && !isOwner) { box.classList.add("disabled"); chk.disabled = true; }
+  if (t && !isOwner) { box.classList.add("disabled"); chk.disabled = true; sel.disabled = true; }
 
   if (t && t.aprovacao && t.aprovacao !== "none") {
+    const apr = approverName(t) || "gestor";
     const txt = {
-      pendente:  ["var(--yellow-soft)", "🔒 Aguardando aprovação de " + (g ? g.nome : "gestor") + "."],
+      pendente:  ["var(--yellow-soft)", "🔒 Aguardando aprovação de " + apr + "."],
       aprovada:  ["var(--green-soft)",  "✓ Aprovada" + (t.aprovacaoObs ? " — " + t.aprovacaoObs : "") + "."],
       reprovada: ["var(--red-soft)",    "⛔ Reprovada" + (t.aprovacaoObs ? " — Motivo: " + t.aprovacaoObs : "") + "."],
     }[t.aprovacao];
     if (txt) { info.style.display = "block"; info.style.background = txt[0]; info.textContent = txt[1]; }
+    if (t.aprovadorId) sel.value = String(t.aprovadorId);
     if (t.aprovacao === "pendente" || t.aprovacao === "aprovada") {
       chk.checked = true; chk.disabled = true; box.classList.add("disabled");
+      sel.disabled = true; sel.style.display = "block";
     }
   }
 }
@@ -1750,7 +1801,7 @@ async function saveTask(e) {
           p_setor: alvo.setor || null,
           p_prioridade: document.getElementById("iPrioridade").checked ? 'critica' : 'normal',
           p_prazo: document.getElementById("iPrazo").value || null,
-          p_confidencial: ehGestor && document.getElementById("iConfidencial").checked,
+          p_confidencial: (currentUser && currentUser.perfil !== 'individual') && document.getElementById("iConfidencial").checked,
         });
         if (error) throw error;
         logAction({ titulo: document.getElementById("iTitulo").value.trim(), setor: alvo.setor || null, userId: para },
@@ -1767,6 +1818,8 @@ async function saveTask(e) {
   }
 
   const wantApproval = document.getElementById("iAprovacao").checked && !document.getElementById("iAprovacao").disabled;
+  const aprovadorId = document.getElementById("iAprovador").value;
+  if (wantApproval && !aprovadorId) { alert("Escolha o gestor que vai aprovar a demanda."); return; }
   const ehGestor = isGestorPerfil(currentUser && currentUser.perfil);
   const data = {
     titulo: document.getElementById("iTitulo").value.trim(),
@@ -1775,7 +1828,7 @@ async function saveTask(e) {
     prazo: document.getElementById("iPrazo").value,
     status: document.getElementById("iStatus").value,
     progresso: 0,
-    confidencial: ehGestor && document.getElementById("iConfidencial").checked,
+    confidencial: (currentUser && currentUser.perfil !== 'individual') && document.getElementById("iConfidencial").checked,
   };
   if (!editingId) {
     // demanda própria: setor da demanda = meu setor; demandante = eu
@@ -1805,15 +1858,15 @@ async function saveTask(e) {
   persist();
   await sbUpsertTask(task);   // garante o id real antes de solicitar aprovação
 
-  // solicita aprovação ao gestor imediato, se marcado e ainda não pendente/aprovada
+  // solicita aprovação ao gestor escolhido, se marcado e ainda não pendente/aprovada
   const jaTemAprov = task.aprovacao === 'pendente' || task.aprovacao === 'aprovada';
   if (wantApproval && !jaTemAprov) {
     if (sb && !isLocalId(task.id)) {
       try {
-        const { error } = await sb.rpc("solicitar_aprovacao", { p_demanda: task.id });
+        const { error } = await sb.rpc("solicitar_aprovacao", { p_demanda: task.id, p_aprovador: aprovadorId });
         if (error) throw error;
-        logAction(task, "Aprovação solicitada", currentUser && currentUser.nome, "gestor");
-        showToast("Aprovação solicitada 🔔", "Seu gestor foi notificado.");
+        logAction(task, "Aprovação solicitada", currentUser && currentUser.nome, nomeDe(aprovadorId));
+        showToast("Aprovação solicitada 🔔", nomeDe(aprovadorId) + " foi notificado(a).");
       } catch (err) {
         alert("Falha ao solicitar aprovação: " + (err.message || err));
       }
@@ -1862,19 +1915,41 @@ function render() {
 
 /* ══════════ ESCOPO Minhas / Equipe (gestores) ══════════ */
 let taskScope = 'minhas';
+/* ids das demandas que EU solicitei a outras pessoas (e foram aceitas → viraram demanda) */
+function solicitadasIds() {
+  if (!currentUser) return new Set();
+  return new Set(solicitacoes
+    .filter(s => String(s.de_user_id) === String(currentUser.id) && s.demanda_id != null)
+    .map(s => String(s.demanda_id)));
+}
+function setorDoDono(t) {
+  return (t.userId && PROFILES_BY_ID[t.userId] && PROFILES_BY_ID[t.userId].setor) || null;
+}
 function scopeApply(list) {
-  if (currentUser && currentUser.perfil !== 'individual' && taskScope === 'minhas') {
-    const id = currentUser.id;
-    return list.filter(t => String(t.userId) === String(id));
+  if (!currentUser) return list;
+  const me = String(currentUser.id);
+  if (taskScope === 'solicitadas') {
+    const ids = solicitadasIds();
+    return list.filter(t => ids.has(String(t.id)));
   }
-  return list;   // 'equipe' (setor) ou perfil individual → o que a RLS já entrega
+  if (taskScope === 'minhas') {
+    return list.filter(t => String(t.userId) === me);
+  }
+  // 'equipe' (setor): master/dev veem tudo; demais veem o próprio setor (modelo "ambos")
+  if (vemTudo(currentUser.perfil)) return list;
+  const s = currentUser.setor;
+  return list.filter(t => s && (t.setor === s || setorDoDono(t) === s));
 }
 function setScope(s) { taskScope = s; render(); }
-function canToggleScope() { return !!(currentUser && currentUser.perfil !== 'individual'); }
+/* todos (inclusive individual) têm ao menos Minhas + Solicitadas */
+function canToggleScope() { return !!currentUser; }
 function scopeSeg(extraStyle) {
+  const setorBtn = (currentUser && currentUser.perfil !== 'individual')
+    ? `<button class="${taskScope === 'equipe' ? 'active' : ''}" onclick="setScope('equipe')">Setor</button>` : '';
   return `<span class="scope-seg"${extraStyle ? ` style="${extraStyle}"` : ''}>
       <button class="${taskScope === 'minhas' ? 'active' : ''}" onclick="setScope('minhas')">Minhas</button>
-      <button class="${taskScope === 'equipe' ? 'active' : ''}" onclick="setScope('equipe')">Setor</button>
+      ${setorBtn}
+      <button class="${taskScope === 'solicitadas' ? 'active' : ''}" onclick="setScope('solicitadas')">Solicitadas</button>
     </span>`;
 }
 
@@ -1894,7 +1969,7 @@ function filterBarHTML() {
   const setores = SETORES.map(s => sel(f.setor, s, esc(s))).join('');
   const scope = canToggleScope() ? scopeSeg('margin-left:auto') : '';
   return `
-    <input type="text" placeholder="🔍 Buscar demanda..." value="${f.busca ? esc(f.busca) : ''}" oninput="onFilter('busca', this.value)">
+    <input type="search" name="busca-demanda" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="🔍 Buscar demanda..." value="${f.busca ? esc(f.busca) : ''}" oninput="onFilter('busca', this.value)">
     <select onchange="onFilter('setor', this.value)"><option value="">Todos os setores</option>${setores}</select>
     <select onchange="onFilter('prioridade', this.value)"><option value="">Prioridade: todas</option>${sel(f.prioridade, 'critica', '⚡ Só prioritárias')}</select>
     <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
@@ -1944,9 +2019,11 @@ function focoList(list) {
   };
   return open.slice().sort((a, b) => rank(b) - rank(a)).slice(0, 4);
 }
-function porSetorData(list) {
+function porSetorData(list, bySolicitante) {
   const ativas = list.filter(t => t.status !== 'concluido');
-  return SETORES.map(s => ({ label: s, n: ativas.filter(t => t.setor === s).length })).sort((a, b) => b.n - a.n);
+  // por solicitante: setor de QUEM PEDIU (setorDemandante); senão setor da demanda
+  const setorDe = t => bySolicitante ? (t.setorDemandante || t.setor) : t.setor;
+  return SETORES.map(s => ({ label: s, n: ativas.filter(t => setorDe(t) === s).length })).sort((a, b) => b.n - a.n);
 }
 function aQuemCobrar() {
   const meId = currentUser && currentUser.id;
@@ -1995,8 +2072,9 @@ function cobrarChip(r) {
 function renderPainel() {
   const el = document.getElementById('painelView');
   if (!el || !currentUser) return;
-  const setorView = canToggleScope() && taskScope === 'equipe';
-  const mine = canToggleScope() ? scopeApply(tasks) : myTasks();  // 'minhas' → próprias; 'equipe' → setor (RLS)
+  const setorView = taskScope === 'equipe';
+  const solicView = taskScope === 'solicitadas';
+  const mine = scopeApply(tasks);  // 'minhas' → próprias; 'equipe' → setor; 'solicitadas' → as que eu pedi
   const ps = painelStats(mine);
   const pendentes = mine.filter(t => t.status !== 'concluido').length;
   const manager = isManagerView();
@@ -2041,12 +2119,13 @@ function renderPainel() {
       : '<div class="empty-soft">Equipe em dia. 🎉</div>';
     rightBlock = `<div class="p-block"><span class="pb-label">A quem cobrar — equipe</span>${body}</div>`;
   } else {
-    const sd = porSetorData(mine);
+    const porSolic = taskScope === 'minhas';
+    const sd = porSetorData(mine, porSolic);
     const max = Math.max(1, ...sd.map(x => x.n));
     const bars = sd.map(x => `<div class="st-row"><div class="st-name" title="${esc(x.label)}">${esc(x.label)}</div>
         <div class="st-track"><div class="st-fill" style="width:${Math.round(x.n / max * 100)}%"></div></div>
         <div class="st-val">${x.n}</div></div>`).join('');
-    rightBlock = `<div class="p-block"><span class="pb-label">Demandas por setor</span>${bars}</div>`;
+    rightBlock = `<div class="p-block"><span class="pb-label">${porSolic ? 'Demandas por setor solicitante' : 'Demandas por setor'}</span>${bars}</div>`;
   }
 
   el.innerHTML = `
@@ -2058,11 +2137,11 @@ function renderPainel() {
       <div class="ph-txt"><div class="t">${pendentes === 1 ? 'demanda pendente' : 'demandas pendentes'}</div>
         <div class="s">tudo que ainda não foi concluído</div></div>
     </div>
-    <span class="section-label">${setorView ? 'Demandas do setor' : 'Suas demandas'}</span>
+    <span class="section-label">${solicView ? 'Demandas que você solicitou' : (setorView ? 'Demandas do setor' : 'Suas demandas')}</span>
     ${cards}
     <div class="newbar"><button class="btn" onclick="openModal()">+ Nova demanda</button></div>
     <div class="p-row2">
-      <div class="p-block"><span class="pb-label">Foco de hoje${setorView ? ' — setor' : (manager ? ' — suas demandas' : '')}</span>${focoHtml}</div>
+      <div class="p-block"><span class="pb-label">Foco de hoje${solicView ? ' — solicitadas' : (setorView ? ' — setor' : (manager ? ' — suas demandas' : ''))}</span>${focoHtml}</div>
       ${rightBlock}
     </div>`;
 }
