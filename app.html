@@ -685,6 +685,15 @@
     border-radius: 8px; font-size: .78rem; cursor: pointer; font-family: inherit; font-weight: 600; }
   .scope-seg button.active { background: var(--accent); color: #fff; }
 
+  /* seletor de visualização (Quadro/Calendário/Listagem) */
+  .dataview-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .view-seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 3px; }
+  .view-seg button { background: none; border: none; color: var(--text-dim); padding: 8px 16px;
+    border-radius: 8px; font-size: .82rem; cursor: pointer; font-family: inherit; font-weight: 600; white-space: nowrap; }
+  .view-seg button:hover { color: var(--text); }
+  .view-seg button.active { background: var(--accent); color: #fff; }
+
   /* status "pausado" */
   .tag.st-pausado { background: rgba(138,127,176,.16); color: #b3a8d6; }
   body.light .tag.st-pausado { color: #5b5280; }
@@ -791,9 +800,7 @@
   <!-- Navegação por abas (sem ícones, sem caixa) -->
   <nav class="tabs-nav">
     <button class="tab-btn active" data-tab="painel" onclick="switchTab('painel', this)">Painel</button>
-    <button class="tab-btn" data-tab="quadro" onclick="switchTab('quadro', this)">Quadro</button>
-    <button class="tab-btn" data-tab="calendario" onclick="switchTab('calendario', this)">Calendário</button>
-    <button class="tab-btn" data-tab="listagem" onclick="switchTab('listagem', this)">Listagem</button>
+    <button class="tab-btn" data-tab="demandas" onclick="switchTab('demandas', this)">Demandas</button>
     <button class="tab-btn" data-tab="aprovacoes" id="tabBtnAprovacoes" onclick="switchTab('aprovacoes', this)" style="display:none">Aprovações <span id="apprTabCount"></span></button>
     <button class="tab-btn" data-tab="solicitacoes" onclick="switchTab('solicitacoes', this)">Solicitações <span id="solicTabCount"></span></button>
     <button class="tab-btn" data-tab="historico" onclick="switchTab('historico', this)">Histórico</button>
@@ -804,60 +811,70 @@
     <div id="painelView"></div>
   </div>
 
-  <!-- ── TAB: QUADRO ── -->
-  <div id="tab-quadro" class="tab-content">
-    <section class="filters" id="filtersQuadro"></section>
-    <section class="board" id="board"></section>
-  </div>
-
-  <!-- ── TAB: CALENDÁRIO ── -->
-  <div id="tab-calendario" class="tab-content">
-    <section class="filters" id="filtersCal"></section>
-    <div class="cal-wrap">
-      <div class="cal-nav" style="justify-content:flex-start;gap:10px">
-        <button class="cal-nav-btn" onclick="calScroll(-1)" title="Voltar">‹</button>
-        <button class="cal-nav-btn" onclick="calScroll(1)" title="Avançar">›</button>
-        <div style="font-size:.82rem;color:var(--text-dim)">Prazos por mês — role para navegar</div>
-      </div>
-      <div class="cal-kanban" id="calKanban"></div>
-      <div class="cal-legend">
-        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--red-bright)"></div>Atrasada</div>
-        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--orange)"></div>Crítica</div>
-        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--lblue)"></div>A vencer</div>
-        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--green)"></div>Concluída</div>
-      </div>
+  <!-- ── TAB: DEMANDAS (Quadro + Calendário + Listagem unificados) ── -->
+  <div id="tab-demandas" class="tab-content">
+    <div class="dataview-bar">
+      <span class="view-seg">
+        <button class="active" data-view="quadro" onclick="setDataView('quadro', this)">▦ Quadro</button>
+        <button data-view="calendario" onclick="setDataView('calendario', this)">📅 Calendário</button>
+        <button data-view="listagem" onclick="setDataView('listagem', this)">≣ Listagem</button>
+      </span>
+      <button class="btn" onclick="openModal()" style="margin-left:auto">+ Nova demanda</button>
     </div>
-  </div>
+    <section class="filters" id="filtersDemandas"></section>
 
-  <!-- ── TAB: LISTAGEM ── -->
-  <div id="tab-listagem" class="tab-content">
-    <div class="tbl-wrap">
-      <div class="tbl-header">
-        <div class="tbl-title">Listagem de Demandas</div>
-        <div class="tbl-filters">
-          <button class="tbl-filter-btn active" onclick="tblFilter('all', this)">Todas</button>
-          <button class="tbl-filter-btn" onclick="tblFilter('alta', this)">Alta prioridade</button>
-          <button class="tbl-filter-btn" onclick="tblFilter('andamento', this)">Em andamento</button>
-          <button class="tbl-filter-btn" onclick="tblFilter('atrasadas', this)">Atrasadas</button>
-          <button class="tbl-filter-btn" onclick="tblFilter('concluido', this)">Concluídas</button>
+    <!-- view: quadro -->
+    <div id="view-quadro" class="data-view">
+      <section class="board" id="board"></section>
+    </div>
+
+    <!-- view: calendário -->
+    <div id="view-calendario" class="data-view" style="display:none">
+      <div class="cal-wrap">
+        <div class="cal-nav" style="justify-content:flex-start;gap:10px">
+          <button class="cal-nav-btn" onclick="calScroll(-1)" title="Voltar">‹</button>
+          <button class="cal-nav-btn" onclick="calScroll(1)" title="Avançar">›</button>
+          <div style="font-size:.82rem;color:var(--text-dim)">Prazos por mês — role para navegar</div>
+        </div>
+        <div class="cal-kanban" id="calKanban"></div>
+        <div class="cal-legend">
+          <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--red-bright)"></div>Atrasada</div>
+          <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--orange)"></div>Crítica</div>
+          <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--lblue)"></div>A vencer</div>
+          <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--green)"></div>Concluída</div>
         </div>
       </div>
-      <section class="filters" id="filtersLst" style="margin-bottom:14px"></section>
-      <div class="tbl-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th onclick="tblSort('id')">ID ↕</th>
-              <th onclick="tblSort('titulo')">Demanda ↕</th>
-              <th onclick="tblSort('setor')">Setor ↕</th>
-              <th onclick="tblSort('solicitante')">Demandante ↕</th>
-              <th onclick="tblSort('prioridade')">Prioridade ↕</th>
-              <th onclick="tblSort('prazo')">Prazo ↕</th>
-              <th onclick="tblSort('status')">Status ↕</th>
-            </tr>
-          </thead>
-          <tbody id="tblBody"></tbody>
-        </table>
+    </div>
+
+    <!-- view: listagem -->
+    <div id="view-listagem" class="data-view" style="display:none">
+      <div class="tbl-wrap">
+        <div class="tbl-header">
+          <div class="tbl-title">Listagem de Demandas</div>
+          <div class="tbl-filters">
+            <button class="tbl-filter-btn active" onclick="tblFilter('all', this)">Todas</button>
+            <button class="tbl-filter-btn" onclick="tblFilter('alta', this)">Alta prioridade</button>
+            <button class="tbl-filter-btn" onclick="tblFilter('andamento', this)">Em andamento</button>
+            <button class="tbl-filter-btn" onclick="tblFilter('atrasadas', this)">Atrasadas</button>
+            <button class="tbl-filter-btn" onclick="tblFilter('concluido', this)">Concluídas</button>
+          </div>
+        </div>
+        <div class="tbl-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th onclick="tblSort('id')">ID ↕</th>
+                <th onclick="tblSort('titulo')">Demanda ↕</th>
+                <th onclick="tblSort('setor')">Setor ↕</th>
+                <th onclick="tblSort('solicitante')">Demandante ↕</th>
+                <th onclick="tblSort('prioridade')">Prioridade ↕</th>
+                <th onclick="tblSort('prazo')">Prazo ↕</th>
+                <th onclick="tblSort('status')">Status ↕</th>
+              </tr>
+            </thead>
+            <tbody id="tblBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -1386,11 +1403,27 @@ function switchTab(id, btn) {
   if (btn) btn.classList.add("active");
   document.getElementById("tab-" + id).classList.add("active");
   renderFilters();
-  if (id === "calendario") renderCalendar();
-  if (id === "listagem") renderTable();
+  if (id === "demandas") renderDataView();
   if (id === "historico") renderHistorico();
   if (id === "aprovacoes") renderApprovals();
   if (id === "solicitacoes") renderSolicitacoes();
+}
+
+/* Visualização interna da aba Demandas: quadro | calendario | listagem */
+let dataView = "quadro";
+function setDataView(v, btn) {
+  dataView = v;
+  document.querySelectorAll(".view-seg button").forEach(b => b.classList.remove("active"));
+  if (btn) btn.classList.add("active");
+  document.querySelectorAll("#tab-demandas .data-view").forEach(el => el.style.display = "none");
+  const target = document.getElementById("view-" + v);
+  if (target) target.style.display = "";
+  renderDataView();
+}
+function renderDataView() {
+  if (dataView === "quadro") renderBoard();
+  else if (dataView === "calendario") renderCalendar();
+  else if (dataView === "listagem") renderTable();
 }
 
 /* ══════════ CALENDÁRIO ══════════ */
@@ -1613,7 +1646,8 @@ function openModal(id) {
     document.getElementById("iStatus").value = t.status;
     document.getElementById("iConfidencial").checked = !!t.confidencial;
     document.getElementById("iAutoSetor").textContent = t.setor || "—";
-    document.getElementById("iAutoSetorDem").textContent = t.setorDemandante || "—";
+    const setorDono = (t.userId && PROFILES_BY_ID[t.userId] && PROFILES_BY_ID[t.userId].setor) || null;
+    document.getElementById("iAutoSetorDem").textContent = t.setorDemandante || setorDono || "—";
     document.getElementById("iAutoDemandante").textContent = t.solicitante || "—";
     setupApprovalBox(t);
   } else {
@@ -1819,11 +1853,9 @@ function fillSelect(id, options, withEmpty) {
 function render() {
   renderPainel();
   renderFilters();
-  renderBoard();
   renderApprovals();
   renderSolicitacoes();
-  if (activeTab === "calendario") renderCalendar();
-  if (activeTab === "listagem") renderTable();
+  if (activeTab === "demandas") renderDataView();
   if (activeTab === "historico") renderHistorico();
   persist();
 }
@@ -1869,15 +1901,11 @@ function filterBarHTML() {
     ${scope}`;
 }
 function renderFilters() {
-  const html = filterBarHTML();
-  ['filtersQuadro', 'filtersCal', 'filtersLst'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = html; });
+  const el = document.getElementById('filtersDemandas');
+  if (el) el.innerHTML = filterBarHTML();
 }
 function onFilter(field, val) { FILT[field] = val; renderActiveDataView(); }
-function renderActiveDataView() {
-  renderBoard();
-  if (activeTab === 'calendario') renderCalendar();
-  if (activeTab === 'listagem') renderTable();
-}
+function renderActiveDataView() { renderDataView(); }
 function limparFiltros() { FILT = { busca: '', setor: '', prioridade: '' }; renderFilters(); renderActiveDataView(); }
 function calScroll(dir) { const k = document.getElementById('calKanban'); if (k) k.scrollBy({ left: dir * 264, behavior: 'smooth' }); }
 
