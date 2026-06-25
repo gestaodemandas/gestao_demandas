@@ -694,6 +694,26 @@
   .view-seg button:hover { color: var(--text); }
   .view-seg button.active { background: var(--accent); color: #fff; }
 
+  /* barra de progresso no card */
+  .t-prog { margin: 8px 0 2px; }
+  .t-prog-head { display: flex; justify-content: space-between; font-size: .62rem; color: var(--text-dim); margin-bottom: 3px; }
+  .t-prog-track { height: 5px; background: var(--surface-3); border-radius: 99px; overflow: hidden; }
+  .t-prog-fill { height: 100%; border-radius: 99px; transition: width .25s; }
+
+  /* subtarefas no modal */
+  .subt-head { display: flex; justify-content: space-between; align-items: center; font-size: .72rem; color: var(--text-dim); margin-bottom: 6px; }
+  .subt-bar { height: 6px; background: var(--surface-3); border-radius: 99px; overflow: hidden; margin-bottom: 12px; }
+  .subt-bar > div { height: 100%; background: var(--accent); border-radius: 99px; transition: width .25s; }
+  .subt-row { display: flex; gap: 10px; align-items: center; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; }
+  .subt-row input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); flex-shrink: 0; cursor: pointer; }
+  .subt-row span { flex: 1; font-size: .85rem; }
+  .subt-row span.subt-done { text-decoration: line-through; color: var(--text-dim); }
+  .subt-del { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: .9rem; padding: 2px 6px; }
+  .subt-del:hover { color: var(--red-bright); }
+  .subt-empty { font-size: .8rem; color: var(--text-dim); padding: 4px 0 10px; }
+  .subt-add { display: flex; gap: 8px; margin-top: 4px; }
+  .subt-add input { flex: 1; }
+
   /* status "pausado" */
   .tag.st-pausado { background: rgba(138,127,176,.16); color: #b3a8d6; }
   body.light .tag.st-pausado { color: #5b5280; }
@@ -952,6 +972,7 @@
           <label>Descrição <span style="color:var(--text-mute);font-size:.65rem;text-transform:none;letter-spacing:0">(opcional)</span></label>
           <textarea id="iDescricao" placeholder="Detalhes da demanda"></textarea>
         </div>
+        <div class="full" id="subtSection" style="display:none"></div>
         <div class="full">
           <div class="appr-box">
             <input type="checkbox" id="iPrioridade">
@@ -1076,6 +1097,8 @@ let histLog = JSON.parse(localStorage.getItem("demandas_log") || "[]");
 let seqCounter = parseInt(localStorage.getItem("demandas_seq") || "0");
 let editingId = null;
 let activeTab = "painel";
+let SUBT_BY_DEMANDA = {};   // demanda_id -> [subtarefas]
+let novaSubt = [];          // subtarefas em staging durante a CRIAÇÃO (títulos)
 
 function persist() {
   localStorage.setItem("demandas", JSON.stringify(tasks));
@@ -1201,6 +1224,13 @@ async function loadFromSupabase() {
     // um cache antigo repovoaria o banco com dados velhos/corrompidos
     // (ex.: setor errado), desfazendo correções. localStorage é só leitura/offline.
     tasks = data.map(rowToTask);
+
+    const { data: subs } = await sb.from("subtarefas").select("*");
+    SUBT_BY_DEMANDA = {};
+    (subs || []).forEach(st => {
+      const k = String(st.demanda_id);
+      (SUBT_BY_DEMANDA[k] = SUBT_BY_DEMANDA[k] || []).push(st);
+    });
 
     const { data: logs } = await sb.from("demandas_log")
       .select("*").order("created_at", { ascending: false }).limit(500);
@@ -1546,7 +1576,9 @@ function renderBoard() {
     const items = base.filter(t => t.status === col.id);
     const cards = items.map(t => {
       const late = t.status !== "concluido" && t.prazo && t.prazo < today();
-      const prog = t.progresso || 0;
+      const subs = SUBT_BY_DEMANDA[String(t.id)] || [];
+      const subDone = subs.filter(s => s.concluida).length;
+      const prog = demandaPct(t);
       const pColor = t.status === "concluido" ? "var(--green)" : prog >= 60 ? "var(--blue)" : "var(--yellow)";
       const critica = t.prioridade === 'critica';
       const isPendApr = t.aprovacao === 'pendente';
@@ -1569,6 +1601,10 @@ function renderBoard() {
         ${apprBadge}
         <h4>${esc(t.titulo)}</h4>
         ${showOwner ? `<div class="t-owner"><span class="avatar">${initials(ownerNm)}</span>${esc(ownerNm)}</div>` : ''}
+        <div class="t-prog">
+          <div class="t-prog-head"><span>${subs.length ? `Subtarefas ${subDone}/${subs.length}` : 'Progresso'}</span><span>${prog}%</span></div>
+          <div class="t-prog-track"><div class="t-prog-fill" style="width:${prog}%;background:${pColor}"></div></div>
+        </div>
         <div class="t-meta">
           <span class="solicitante"><span class="avatar">${initials(t.solicitante)}</span>${esc(t.solicitante)}</span>
           ${t.prazo ? `<span class="due ${late ? "late" : ""}">${late ? "⚠ " : "📅 "}${fmtDate(t.prazo)}</span>` : ""}
@@ -1674,6 +1710,10 @@ function openModal(id) {
   // Confidencial disponível para "usuário pra cima" (todos menos perfil individual)
   document.getElementById("confRow").style.display =
     (currentUser && currentUser.perfil !== 'individual') ? '' : 'none';
+  // Subtarefas: edição usa as do banco; criação usa staging (novaSubt)
+  novaSubt = [];
+  if (id) renderSubtarefas(tasks.find(x => String(x.id) === String(id)));
+  else renderSubtCreate();
   document.getElementById("overlay").classList.add("open");
   (id ? document.getElementById("iTitulo") : document.getElementById("iPara")).focus();
 }
@@ -1783,6 +1823,109 @@ function closeModal() {
   editingId = null;
 }
 
+/* ══════════ SUBTAREFAS ══════════ */
+function demandaPct(t) {
+  const subs = SUBT_BY_DEMANDA[String(t.id)] || [];
+  if (subs.length) return Math.round(subs.filter(s => s.concluida).length / subs.length * 100);
+  return t.status === 'concluido' ? 100 : 0;
+}
+function podeGerirSubt(t) {
+  if (!currentUser || !t) return false;
+  const me = String(currentUser.id);
+  if (String(t.userId) === me) return true;            // dono / atribuído
+  if (isManagerView()) return true;                     // gestor/master/dev (RLS refina)
+  if (solicitadasIds().has(String(t.id))) return true;  // criador (eu solicitei)
+  return false;
+}
+function renderSubtarefas(t) {
+  const sec = document.getElementById("subtSection");
+  if (!sec) return;
+  if (!t || !t.id) { sec.style.display = "none"; sec.innerHTML = ""; return; }
+  sec.style.display = "";
+  const subs = (SUBT_BY_DEMANDA[String(t.id)] || []).slice()
+    .sort((a, b) => (a.ordem || 0) - (b.ordem || 0) || a.id - b.id);
+  const done = subs.filter(s => s.concluida).length;
+  const pct = subs.length ? Math.round(done / subs.length * 100) : (t.status === 'concluido' ? 100 : 0);
+  const manage = podeGerirSubt(t);
+  const rows = subs.map(s => `
+    <div class="subt-row">
+      <input type="checkbox" ${s.concluida ? 'checked' : ''} ${manage ? '' : 'disabled'} onchange="toggleSubt(${s.id}, this.checked, '${t.id}')">
+      <span class="${s.concluida ? 'subt-done' : ''}">${esc(s.titulo)}</span>
+      ${manage ? `<button type="button" class="subt-del" title="Remover" onclick="delSubt(${s.id}, '${t.id}')">✕</button>` : ''}
+    </div>`).join("");
+  sec.innerHTML = `
+    <div class="subt-head"><label style="margin:0">Subtarefas</label><span>${done}/${subs.length} · ${pct}%</span></div>
+    <div class="subt-bar"><div style="width:${pct}%"></div></div>
+    <div class="subt-list">${rows || '<div class="subt-empty">Nenhuma subtarefa ainda.</div>'}</div>
+    ${manage ? `<div class="subt-add">
+      <input type="text" id="subtNew" placeholder="Nova subtarefa..." onkeydown="if(event.key==='Enter'){event.preventDefault();addSubt('${t.id}')}">
+      <button type="button" class="btn btn-ghost" onclick="addSubt('${t.id}')">+ Adicionar</button>
+    </div>` : ''}`;
+}
+async function addSubt(demandaId) {
+  const inp = document.getElementById("subtNew");
+  const titulo = (inp && inp.value || "").trim();
+  if (!titulo) return;
+  if (!sb) { alert("Sem conexão com o servidor."); return; }
+  const n = (SUBT_BY_DEMANDA[String(demandaId)] || []).length;
+  try {
+    const { error } = await sb.from("subtarefas").insert([{ demanda_id: demandaId, titulo, ordem: n, criada_por: currentUser && currentUser.id }]);
+    if (error) throw error;
+    await refreshSubt(demandaId);
+  } catch (e) { alert("Falha ao adicionar subtarefa: " + (e.message || e)); }
+}
+async function toggleSubt(id, concluida, demandaId) {
+  if (!sb) return;
+  try {
+    const { error } = await sb.from("subtarefas").update({ concluida }).eq("id", id);
+    if (error) throw error;
+    await refreshSubt(demandaId);
+  } catch (e) { alert("Falha ao atualizar subtarefa: " + (e.message || e)); }
+}
+async function delSubt(id, demandaId) {
+  if (!sb) return;
+  if (!confirm("Remover esta subtarefa?")) return;
+  try {
+    const { error } = await sb.from("subtarefas").delete().eq("id", id);
+    if (error) throw error;
+    await refreshSubt(demandaId);
+  } catch (e) { alert("Falha ao remover subtarefa: " + (e.message || e)); }
+}
+async function refreshSubt(demandaId) {
+  await loadFromSupabase();   // recarrega subtarefas + status/progresso (trigger pode ter concluído/reaberto)
+  await loadNotificacoes();
+  if (document.getElementById("overlay").classList.contains("open")) {
+    renderSubtarefas(tasks.find(x => String(x.id) === String(demandaId)));
+  }
+}
+/* staging na CRIAÇÃO (subtarefas adicionadas antes da demanda existir) */
+function renderSubtCreate() {
+  const sec = document.getElementById("subtSection");
+  if (!sec) return;
+  sec.style.display = "";
+  const rows = novaSubt.map((titulo, i) => `
+    <div class="subt-row">
+      <span>${esc(titulo)}</span>
+      <button type="button" class="subt-del" title="Remover" onclick="removeNovaSubt(${i})">✕</button>
+    </div>`).join("");
+  sec.innerHTML = `
+    <div class="subt-head"><label style="margin:0">Subtarefas <span style="color:var(--text-dim);font-weight:400">(opcional)</span></label><span>${novaSubt.length} item(ns)</span></div>
+    <div class="subt-list">${rows || '<div class="subt-empty">Adicione subtarefas uma a uma. A demanda conclui quando todas forem marcadas.</div>'}</div>
+    <div class="subt-add">
+      <input type="text" id="subtNew" placeholder="Nova subtarefa..." onkeydown="if(event.key==='Enter'){event.preventDefault();addNovaSubt()}">
+      <button type="button" class="btn btn-ghost" onclick="addNovaSubt()">+ Adicionar</button>
+    </div>`;
+}
+function addNovaSubt() {
+  const inp = document.getElementById("subtNew");
+  const t = (inp && inp.value || "").trim();
+  if (!t) return;
+  novaSubt.push(t);
+  renderSubtCreate();
+  const ni = document.getElementById("subtNew"); if (ni) ni.focus();
+}
+function removeNovaSubt(i) { novaSubt.splice(i, 1); renderSubtCreate(); }
+
 async function saveTask(e) {
   e.preventDefault();
 
@@ -1808,6 +1951,7 @@ async function saveTask(e) {
           p_prazo: document.getElementById("iPrazo").value || null,
           p_confidencial: (currentUser && currentUser.perfil !== 'individual') && document.getElementById("iConfidencial").checked,
           p_aprovador: querAprov ? aprovadorSolic : null,
+          p_subtarefas: novaSubt.length ? novaSubt : null,
         });
         if (error) throw error;
         logAction({ titulo: document.getElementById("iTitulo").value.trim(), setor: alvo.setor || null, userId: para },
@@ -1863,6 +2007,15 @@ async function saveTask(e) {
   }
   persist();
   await sbUpsertTask(task);   // garante o id real antes de solicitar aprovação
+
+  // cria as subtarefas adicionadas na criação (demanda própria nova)
+  if (!editingId && novaSubt.length && sb && !isLocalId(task.id)) {
+    try {
+      await sb.from("subtarefas").insert(novaSubt.map((titulo, i) => ({
+        demanda_id: task.id, titulo, ordem: i, criada_por: currentUser && currentUser.id
+      })));
+    } catch (err) { console.warn("Falha ao criar subtarefas:", err.message || err); }
+  }
 
   // solicita aprovação ao gestor escolhido, se marcado e ainda não pendente/aprovada
   const jaTemAprov = task.aprovacao === 'pendente' || task.aprovacao === 'aprovada';
