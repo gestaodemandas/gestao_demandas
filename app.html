@@ -723,6 +723,13 @@
   .view-seg button:hover { color: var(--text); }
   .view-seg button.active { background: var(--accent); color: #fff; }
 
+  /* abas internas do modal de demanda (Criação / Execução) */
+  .modal-tabs { display: flex; gap: 2px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .mtab { background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-dim);
+    padding: 9px 16px; font-size: .86rem; font-weight: 600; cursor: pointer; font-family: inherit; margin-bottom: -1px; }
+  .mtab:hover { color: var(--text); }
+  .mtab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
   /* barra de progresso no card */
   .t-prog { margin: 8px 0 2px; }
   .t-prog-head { display: flex; justify-content: space-between; font-size: .62rem; color: var(--text-dim); margin-bottom: 3px; }
@@ -980,69 +987,88 @@
     <h2 id="modalTitle">Nova demanda</h2>
     <div id="roBanner" style="display:none;margin:0 0 14px;padding:10px 12px;border-radius:8px;background:var(--lblue-soft,rgba(95,176,232,.12));color:var(--lblue,#5fb0e8);font-size:.82rem;border:1px solid rgba(95,176,232,.3)">👁 Somente leitura — você está acompanhando uma demanda que solicitou. Quem edita é o responsável.</div>
     <form id="taskForm" onsubmit="saveTask(event)">
-      <div class="full" id="iParaRow" style="margin-bottom:16px">
-        <label>Para quem</label>
-        <select id="iPara" onchange="onParaChange()"></select>
-        <div class="para-hint" id="iParaHint">Escolha quem vai cuidar da demanda para liberar o restante.</div>
+      <div class="modal-tabs">
+        <button type="button" class="mtab active" data-mtab="criacao" onclick="setModalTab('criacao')">Criação</button>
+        <button type="button" class="mtab" data-mtab="execucao" onclick="setModalTab('execucao')">Execução</button>
       </div>
-      <div class="form-grid" id="taskFormRest">
-        <div class="full auto-block" id="autoBlock">
-          <div class="ab-item"><span class="ab-k">Setor da demanda</span><span class="ab-v" id="iAutoSetor">—</span></div>
-          <div class="ab-item"><span class="ab-k">Setor do demandante</span><span class="ab-v" id="iAutoSetorDem">—</span></div>
-          <div class="ab-item"><span class="ab-k">Demandante</span><span class="ab-v" id="iAutoDemandante">—</span></div>
+
+      <!-- ABA: CRIAÇÃO -->
+      <div class="modal-tab" id="mtab-criacao">
+        <div class="full" id="iParaRow" style="margin-bottom:16px">
+          <label>Para quem</label>
+          <select id="iPara" onchange="onParaChange()"></select>
+          <div class="para-hint" id="iParaHint">Escolha quem vai cuidar da demanda para liberar o restante.</div>
         </div>
-        <div class="full">
-          <label>Título da demanda</label>
-          <input type="text" id="iTitulo" required placeholder="Ex.: Revisão da base de fornecedores">
-        </div>
-        <div class="full">
-          <label>Descrição <span style="color:var(--text-mute);font-size:.65rem;text-transform:none;letter-spacing:0">(opcional)</span></label>
-          <textarea id="iDescricao" placeholder="Detalhes da demanda"></textarea>
-        </div>
-        <div class="full" id="subtSection" style="display:none"></div>
-        <div class="full">
-          <div class="appr-box">
-            <input type="checkbox" id="iPrioridade">
-            <div class="ab-body">
-              <div class="ab-title">Prioridade</div>
-              <div class="ab-sub">Marque para sinalizar como prioritária — a demanda recebe o destaque em chamas 🔥.</div>
+        <div class="form-grid" id="taskFormRest">
+          <div class="full auto-block" id="autoBlock">
+            <div class="ab-item"><span class="ab-k">Setor da demanda</span><span class="ab-v" id="iAutoSetor">—</span></div>
+            <div class="ab-item"><span class="ab-k">Setor do demandante</span><span class="ab-v" id="iAutoSetorDem">—</span></div>
+            <div class="ab-item"><span class="ab-k">Demandante</span><span class="ab-v" id="iAutoDemandante">—</span></div>
+          </div>
+          <div class="full">
+            <label>Título da demanda</label>
+            <input type="text" id="iTitulo" required placeholder="Ex.: Revisão da base de fornecedores">
+          </div>
+          <div class="full">
+            <label>Descrição <span style="color:var(--text-mute);font-size:.65rem;text-transform:none;letter-spacing:0">(opcional)</span></label>
+            <textarea id="iDescricao" placeholder="Detalhes da demanda"></textarea>
+          </div>
+          <div>
+            <label>Prazo</label>
+            <input type="date" id="iPrazo">
+          </div>
+          <div class="full">
+            <div class="appr-box">
+              <input type="checkbox" id="iPrioridade">
+              <div class="ab-body">
+                <div class="ab-title">Prioridade</div>
+                <div class="ab-sub">Marque para sinalizar como prioritária — a demanda recebe o destaque em chamas 🔥.</div>
+              </div>
             </div>
           </div>
-        </div>
-        <div>
-          <label>Prazo</label>
-          <input type="date" id="iPrazo">
-        </div>
-        <div class="full" id="confRow" style="display:none">
-          <div class="appr-box">
-            <input type="checkbox" id="iConfidencial" onchange="confirmarConfidencial(this)">
-            <div class="ab-body">
-              <div class="ab-title">Confidencial</div>
-              <div class="ab-sub">Oculta a demanda dos demais — só você, o seu gestor e a pessoa atribuída conseguem ver.</div>
+          <div class="full" id="confRow" style="display:none">
+            <div class="appr-box">
+              <input type="checkbox" id="iConfidencial" onchange="confirmarConfidencial(this)">
+              <div class="ab-body">
+                <div class="ab-title">Confidencial</div>
+                <div class="ab-sub">Oculta a demanda dos demais — só você, o seu gestor e a pessoa atribuída conseguem ver.</div>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="owner-only">
-          <label>Status</label>
-          <select id="iStatus">
-            <option value="backlog">Backlog</option>
-            <option value="andamento">Em andamento</option>
-            <option value="aguardando">Aguardando terceiros</option>
-            <option value="pausado">Pausado</option>
-            <option value="concluido">Concluído</option>
-          </select>
-        </div>
-        <div class="full owner-only" id="apprWrap">
-          <label>Aprovação do gestor</label>
-          <div class="appr-box" id="apprBox">
-            <input type="checkbox" id="iAprovacao" onchange="onAprovacaoToggle()">
-            <div class="ab-body">
-              <div class="ab-title">Solicitar aprovação</div>
-              <div class="ab-sub">Use quando a demanda exigir autorização. Escolha o gestor com alçada — a demanda fica retida até a decisão dele.</div>
-              <select id="iAprovador" style="margin-top:8px;display:none"></select>
+          <div class="full owner-only" id="apprWrap">
+            <label>Aprovação do gestor</label>
+            <div class="appr-box" id="apprBox">
+              <input type="checkbox" id="iAprovacao" onchange="onAprovacaoToggle()">
+              <div class="ab-body">
+                <div class="ab-title">Solicitar aprovação</div>
+                <div class="ab-sub">Use quando a demanda exigir autorização. Escolha o gestor com alçada — a demanda fica retida até a decisão dele.</div>
+                <select id="iAprovador" style="margin-top:8px;display:none"></select>
+              </div>
             </div>
+            <div class="appr-status-info" id="apprStatusInfo" style="display:none"></div>
           </div>
-          <div class="appr-status-info" id="apprStatusInfo" style="display:none"></div>
+        </div>
+      </div>
+
+      <!-- ABA: EXECUÇÃO -->
+      <div class="modal-tab" id="mtab-execucao" style="display:none">
+        <div class="form-grid">
+          <div class="full" id="subtSection" style="display:none"></div>
+          <div class="owner-only" id="statusRow">
+            <label>Status</label>
+            <select id="iStatus">
+              <option value="backlog">Backlog</option>
+              <option value="andamento">Em andamento</option>
+              <option value="aguardando">Aguardando terceiros</option>
+              <option value="pausado">Pausado</option>
+              <option value="concluido">Concluído</option>
+            </select>
+          </div>
+          <div class="full">
+            <label>Pasta de Arquivos da Demanda <span style="color:var(--text-mute);font-size:.65rem;text-transform:none;letter-spacing:0">(opcional)</span></label>
+            <input type="text" id="iPasta" oninput="renderPastaLink()" placeholder="Cole o caminho da pasta ou link das evidências">
+            <div id="iPastaLink" style="display:none;margin-top:6px;font-size:.78rem"></div>
+          </div>
         </div>
       </div>
       <div class="modal-actions">
@@ -1211,6 +1237,7 @@ function taskToRow(t) {
     status: t.status,
     confidencial: !!t.confidencial,
     progresso: t.progresso || 0,
+    pasta_arquivos: t.pasta || null,
     criada_em: t.criadaEm || today(),
     concluida_em: t.concluidaEm || null,
   };
@@ -1229,6 +1256,7 @@ function rowToTask(r) {
     status: r.status,
     confidencial: !!r.confidencial,
     progresso: r.progresso || 0,
+    pasta: r.pasta_arquivos || "",
     criadaEm: r.criada_em,
     concluidaEm: r.concluida_em || undefined,
     userId: r.user_id || null,
@@ -1709,6 +1737,7 @@ function openModal(id) {
     document.getElementById("iPrazo").value = t.prazo || "";
     document.getElementById("iStatus").value = t.status;
     document.getElementById("iConfidencial").checked = !!t.confidencial;
+    document.getElementById("iPasta").value = t.pasta || "";
     document.getElementById("iAutoSetor").textContent = t.setor || "—";
     const setorDono = (t.userId && PROFILES_BY_ID[t.userId] && PROFILES_BY_ID[t.userId].setor) || null;
     document.getElementById("iAutoSetorDem").textContent = t.setorDemandante || setorDono || "—";
@@ -1736,10 +1765,14 @@ function openModal(id) {
   // Confidencial disponível para "usuário pra cima" (todos menos perfil individual)
   document.getElementById("confRow").style.display =
     (currentUser && currentUser.perfil !== 'individual') ? '' : 'none';
+  // Status só na EDIÇÃO — toda demanda nasce em backlog
+  document.getElementById("statusRow").style.display = id ? '' : 'none';
   // Subtarefas: edição usa as do banco; criação usa staging (novaSubt)
   novaSubt = [];
   if (id) renderSubtarefas(tasks.find(x => String(x.id) === String(id)));
   else renderSubtCreate();
+  renderPastaLink();
+  setModalTab("criacao");   // sempre abre na aba Criação
   document.getElementById("overlay").classList.add("open");
   (id ? document.getElementById("iTitulo") : document.getElementById("iPara")).focus();
 }
@@ -1847,6 +1880,20 @@ function setupApprovalBox(t) {
 function closeModal() {
   document.getElementById("overlay").classList.remove("open");
   editingId = null;
+}
+function setModalTab(name) {
+  document.querySelectorAll(".modal-tabs .mtab").forEach(b => b.classList.toggle("active", b.dataset.mtab === name));
+  document.getElementById("mtab-criacao").style.display = name === "criacao" ? "" : "none";
+  document.getElementById("mtab-execucao").style.display = name === "execucao" ? "" : "none";
+}
+function renderPastaLink() {
+  const v = (document.getElementById("iPasta").value || "").trim();
+  const box = document.getElementById("iPastaLink");
+  if (!box) return;
+  if (/^https?:\/\//i.test(v)) {
+    box.style.display = "block";
+    box.innerHTML = `<a href="${esc(v)}" target="_blank" rel="noopener" style="color:var(--accent)">🔗 Abrir pasta/arquivo</a>`;
+  } else { box.style.display = "none"; box.innerHTML = ""; }
 }
 
 /* ══════════ SUBTAREFAS ══════════ */
@@ -2012,9 +2059,11 @@ async function saveTask(e) {
     status: document.getElementById("iStatus").value,
     progresso: 0,
     confidencial: (currentUser && currentUser.perfil !== 'individual') && document.getElementById("iConfidencial").checked,
+    pasta: document.getElementById("iPasta").value.trim(),
   };
   if (!editingId) {
-    // demanda própria: setor da demanda = meu setor; demandante = eu
+    // toda demanda nasce no backlog; demanda própria: setor da demanda = meu setor; demandante = eu
+    data.status = 'backlog';
     data.setor = (currentUser && currentUser.setor) || "";
     data.setorDemandante = (currentUser && currentUser.setor) || "";
     data.solicitante = (currentUser && currentUser.nome) || "";
@@ -2192,9 +2241,10 @@ function painelStats(list) {
     aVencer: list.filter(within7).length,
     atrasada: list.filter(t => aberta(t) && t.prazo && t.prazo < today()).length,
     aguardando: list.filter(aguardandoAprov).length,
-    pendentes: list.filter(aberta).length,                                   // todas não concluídas, fora aprovação
-    futuros: list.filter(t => aberta(t) && t.prazo && t.prazo >= today() && !within7(t)).length,
-    semPrazo: list.filter(t => aberta(t) && !t.prazo).length,
+    backlog: list.filter(t => t.status === 'backlog').length,                // ainda não iniciadas
+    concluidas: list.filter(t => t.status === 'concluido').length,
+    // pendentes = iniciadas e não concluídas (exclui backlog e aguardando aprovação)
+    pendentes: list.filter(t => aberta(t) && t.status !== 'backlog').length,
   };
 }
 function onFireSet() {
@@ -2346,20 +2396,11 @@ function renderPainel() {
         <button class="btn" onclick="switchTab('aprovacoes', document.getElementById('tabBtnAprovacoes'))">Revisar</button></div>`
     : '';
 
-  const pendCard = `<div class="m3d">
-      <span class="ico"><svg viewBox="0 0 24 24" stroke="#666666" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
-      <div class="num" style="color:var(--st-pend)">${ps.pendentes}</div>
-      <div class="lbl">Pendentes</div>
-      <div class="pend-break">
-        <div><span>A vencer (7 dias)</span><b>${ps.aVencer}</b></div>
-        <div><span>Futuros</span><b>${ps.futuros}</b></div>
-        ${ps.semPrazo ? `<div><span>Sem prazo</span><b>${ps.semPrazo}</b></div>` : ''}
-      </div>
-    </div>`;
-  const cards = `<div class="m-cards m-cards-3">
-    ${pendCard}
+  const cards = `<div class="m-cards">
+    ${pCard('#666666', 'var(--st-pend)', ps.pendentes, 'Pendentes', 'em andamento', '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>')}
     ${pCard('#C51230', 'var(--st-late)', ps.atrasada, 'Atrasada' + (ps.atrasada === 1 ? '' : 's'), 'requer atenção', '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>')}
-    ${pCard('#9e9e9e', 'var(--st-wait)', ps.aguardando, 'Aguardando aprovação', 'na fila do gestor', '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>')}
+    ${pCard('#9e9e9e', 'var(--st-wait)', ps.backlog, 'Backlog', 'ainda não iniciadas', '<path d="M3 6h18M3 12h18M3 18h18"/>')}
+    ${pCard('#7C9063', 'var(--st-done)', ps.concluidas, 'Concluída' + (ps.concluidas === 1 ? '' : 's'), 'finalizadas', '<path d="M20 6 9 17l-5-5"/>')}
   </div>`;
 
   const foco = focoList(mine);
