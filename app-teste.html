@@ -109,6 +109,9 @@
   header h1 span { color: var(--accent); }
   header .sub { color: var(--text-dim); font-size: .8rem; margin-top: 2px; }
   .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  #refreshBtn svg { width: 18px; height: 18px; }
+  #refreshBtn.spin svg { animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
   .btn {
     background: var(--accent); color: #fff; border: none; cursor: pointer;
     padding: 10px 18px; border-radius: var(--radius); font-weight: 600; font-size: .9rem;
@@ -940,9 +943,12 @@
 <div class="main-area">
 <header class="chrome">
   <div class="header-actions">
-    <div class="sync-chip" id="syncChip" onclick="refreshData()" title="Clique para atualizar os dados">
+    <div class="sync-chip" id="syncChip" onclick="refreshAll()" title="Clique para atualizar os dados">
       <span class="dot"></span><span id="syncLabel">Carregando...</span>
     </div>
+    <button class="btn-icon" id="refreshBtn" onclick="refreshAll()" title="Atualizar dados">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    </button>
     <div class="bell-wrap" id="bellWrap" style="display:none">
       <button class="btn-icon bell-btn" id="bellBtn" onclick="toggleBell(event)" title="Notificações">
         🔔<span class="bell-badge" id="bellBadge" style="display:none">0</span>
@@ -1395,7 +1401,22 @@ async function loadFromSupabase() {
   }
 }
 
-function refreshData() { loadFromSupabase(); }
+async function refreshAll() {
+  if (!sb) { showToast("Offline", "Sem conexão com o servidor."); return; }
+  const btn = document.getElementById("refreshBtn");
+  if (btn) btn.classList.add("spin");
+  updateSyncChip("syncing");
+  try {
+    await loadFromSupabase();    // demandas + subtarefas + log (+ render)
+    await loadNotificacoes();
+    await loadSolicitacoes();
+    showToast("Dados atualizados ✓", "Sincronizado com o servidor.");
+  } catch (e) {
+    showToast("Falha ao atualizar", e.message || String(e));
+  }
+  if (btn) btn.classList.remove("spin");
+}
+function refreshData() { refreshAll(); }
 
 async function sbUpsertTask(t) {
   if (!sb) return;
