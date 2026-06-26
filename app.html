@@ -730,6 +730,29 @@
   .mtab:hover { color: var(--text); }
   .mtab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
+  /* colunas ordenáveis */
+  th[data-field] { cursor: pointer; user-select: none; white-space: nowrap; }
+  th[data-field]:hover { color: var(--text); }
+  .sort-ar { font-size: .7rem; color: var(--accent); margin-left: 2px; }
+  /* ilustração discreta no cabeçalho das abas */
+  .tab-illus { display: inline-flex; flex-shrink: 0; color: var(--accent); }
+  .tab-illus svg { width: 32px; height: 32px; opacity: .55; }
+  /* estado vazio ilustrado */
+  .empty-illus { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 32px 10px; color: var(--text-mute); font-size: .85rem; text-align: center; }
+  .empty-illus svg { width: 60px; height: 60px; opacity: .35; color: var(--text-dim); }
+  /* Solicitações em 2 colunas */
+  .solic-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 860px) { .solic-grid { grid-template-columns: 1fr; } }
+  .solic-col { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; min-width: 0; }
+  .solic-col-head { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-dim); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .solic-col-head .cdot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .s-acts { display: flex; gap: 6px; white-space: nowrap; }
+  .s-mini { font-size: .68rem; padding: 4px 9px; border-radius: 6px; border: 1px solid var(--border); background: none; cursor: pointer; font-family: inherit; font-weight: 600; color: var(--text-dim); }
+  .s-mini.ok:hover { color: var(--st-done); border-color: var(--st-done); }
+  .s-mini.no:hover { color: var(--st-late); border-color: var(--st-late); }
+  .s-demanda { font-weight: 600; }
+  .s-sub { font-size: .68rem; color: var(--text-mute); }
+
   /* barra de progresso no card */
   .t-prog { margin: 8px 0 2px; }
   .t-prog-head { display: flex; justify-content: space-between; font-size: .62rem; color: var(--text-dim); margin-bottom: 3px; }
@@ -944,38 +967,72 @@
 
   <!-- ── TAB: SOLICITAÇÕES ── -->
   <div id="tab-solicitacoes" class="tab-content">
-    <div style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-      <div>
-        <div class="tbl-title" style="font-size:1rem">Solicitações</div>
-        <div style="font-size:.78rem;color:var(--text-dim);margin-top:4px">Demandas que pediram a você (aceite ou recuse) e o que você solicitou a outras pessoas.</div>
+    <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="tab-illus" id="illusSolic"></span>
+        <div>
+          <div class="tbl-title" style="font-size:1rem">Solicitações</div>
+          <div style="font-size:.78rem;color:var(--text-dim);margin-top:4px">O que pediram a você (aceite ou recuse) e o que você solicitou a outras pessoas.</div>
+        </div>
       </div>
       <span id="solicScope"></span>
     </div>
-    <span class="section-label" style="margin-top:0">Recebidas — aguardando sua resposta</span>
-    <div id="solicRecebidas"></div>
-    <span class="section-label">Enviadas por você</span>
-    <div id="solicEnviadas"></div>
+    <section class="filters" style="margin-bottom:14px">
+      <input type="search" id="solicBusca" autocomplete="off" placeholder="🔍 Buscar solicitação..." oninput="onSolicFilter('busca', this.value)">
+      <select id="solicStatus" onchange="onSolicFilter('status', this.value)">
+        <option value="">Todos os status</option>
+        <option value="pendente">Pendente</option>
+        <option value="aceita">Aceita</option>
+        <option value="recusada">Recusada</option>
+      </select>
+      <button class="btn btn-ghost" onclick="limparSolicFiltros()">Limpar</button>
+    </section>
+    <div class="solic-grid">
+      <div class="solic-col">
+        <div class="solic-col-head"><span class="cdot" style="background:var(--st-late)"></span>Recebidas</div>
+        <div id="solicRecebidas"></div>
+      </div>
+      <div class="solic-col">
+        <div class="solic-col-head"><span class="cdot" style="background:var(--accent)"></span>Enviadas</div>
+        <div id="solicEnviadas"></div>
+      </div>
+    </div>
   </div>
 
   <!-- ── TAB: HISTÓRICO ── -->
   <div id="tab-historico" class="tab-content">
     <div class="tbl-wrap">
       <div class="tbl-header">
-        <div>
-          <div class="tbl-title">Histórico de Movimentações</div>
-          <div style="font-size:.75rem;color:var(--text-dim);margin-top:3px">Log geral: criações, atualizações, aprovações e solicitações</div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="tab-illus" id="illusHist"></span>
+          <div>
+            <div class="tbl-title">Histórico de Movimentações</div>
+            <div style="font-size:.75rem;color:var(--text-dim);margin-top:3px">Log geral: criações, atualizações, aprovações e solicitações</div>
+          </div>
         </div>
         <span id="histScope"></span>
       </div>
+      <section class="filters" style="margin-bottom:12px">
+        <input type="search" id="histBusca" autocomplete="off" placeholder="🔍 Buscar no histórico..." oninput="onHistFilter('busca', this.value)">
+        <select id="histAcao" onchange="onHistFilter('acao', this.value)"><option value="">Todas as ações</option></select>
+        <button class="btn btn-ghost" onclick="limparHistFiltros()">Limpar</button>
+      </section>
       <div class="tbl-scroll">
         <table>
           <thead>
-            <tr><th>Data/Hora</th><th>Quem</th><th>Demanda</th><th>Ação</th><th>De</th><th>Para</th></tr>
+            <tr>
+              <th data-field="iso" onclick="histSortBy('iso')">Data/Hora <span class="sort-ar"></span></th>
+              <th data-field="quem" onclick="histSortBy('quem')">Quem <span class="sort-ar"></span></th>
+              <th data-field="demanda" onclick="histSortBy('demanda')">Demanda <span class="sort-ar"></span></th>
+              <th data-field="acao" onclick="histSortBy('acao')">Ação <span class="sort-ar"></span></th>
+              <th data-field="de" onclick="histSortBy('de')">De <span class="sort-ar"></span></th>
+              <th data-field="para" onclick="histSortBy('para')">Para <span class="sort-ar"></span></th>
+            </tr>
           </thead>
           <tbody id="histBody"></tbody>
         </table>
       </div>
-      <div class="hist-empty" id="histEmpty" style="display:none">Nenhuma movimentação registrada ainda.</div>
+      <div class="hist-empty" id="histEmpty" style="display:none"></div>
     </div>
   </div>
 </main>
@@ -1295,6 +1352,7 @@ async function loadFromSupabase() {
         const p = n => String(n).padStart(2, "0");
         return {
           ts: `${p(d.getDate())}/${p(d.getMonth()+1)}/${String(d.getFullYear()).slice(2)} ${p(d.getHours())}:${p(d.getMinutes())}`,
+          iso: l.created_at || "",
           code: l.demanda_code || "", titulo: l.titulo, acao: l.acao, de: l.de || "—", para: l.para || "—",
           userId: l.user_id || null, setor: l.setor || null, setorDono: l.setor_dono || null,
         };
@@ -1363,7 +1421,7 @@ async function sbLog(entry) {
 function logAction(task, acao, de, para) {
   const donoSetor = (task.userId && PROFILES_BY_ID[task.userId] && PROFILES_BY_ID[task.userId].setor) || null;
   const entry = {
-    ts: nowStr(), code: task.code || "", titulo: task.titulo, acao,
+    ts: nowStr(), iso: new Date().toISOString(), code: task.code || "", titulo: task.titulo, acao,
     de: de || "—", para: para || "—",
     userId: currentUser ? currentUser.id : null,          // ATOR (quem fez a ação)
     setor: task.setor || null,                            // setor da demanda/evento
@@ -1374,18 +1432,83 @@ function logAction(task, acao, de, para) {
   sbLog(entry);
 }
 
+/* Ilustrações SVG sutis (sem arquivos externos) */
+const ILLUS = {
+  history: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v6h6"/><path d="M3.5 9a9 9 0 1 1-.7 4.8"/><path d="M12 7v5l3 2"/></svg>',
+  inbox: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l2-8h10l2 8"/><path d="M3 13h5l2 3h4l2-3h5v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+  empty: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M8 14h8M8 17h5"/></svg>',
+};
+function cmpVals(a, b, asc) {
+  const r = String(a == null ? '' : a).localeCompare(String(b == null ? '' : b), 'pt-BR', { numeric: true, sensitivity: 'base' });
+  return asc ? r : -r;
+}
+function setSortArrows(thead, sort) {
+  thead.querySelectorAll('th[data-field]').forEach(th => {
+    const ar = th.querySelector('.sort-ar');
+    if (ar) ar.textContent = th.dataset.field === sort.field ? (sort.asc ? '▲' : '▼') : '';
+  });
+}
+
+let histFilt = { busca: '', acao: '' };
+let histSort = { field: 'iso', asc: false };
+function onHistFilter(field, val) { histFilt[field] = val; renderHistorico(); }
+function limparHistFiltros() {
+  histFilt = { busca: '', acao: '' };
+  const b = document.getElementById('histBusca'); if (b) b.value = '';
+  renderHistorico();
+}
+function histSortBy(field) {
+  if (histSort.field === field) histSort.asc = !histSort.asc;
+  else histSort = { field, asc: field !== 'iso' };
+  renderHistorico();
+}
+function histKey(h, field) {
+  switch (field) {
+    case 'iso': return h.iso || h.ts || '';
+    case 'quem': return nomeDe(h.userId);
+    case 'demanda': return (h.code || '') + ' ' + (h.titulo || '');
+    case 'acao': return h.acao || '';
+    case 'de': return h.de || '';
+    case 'para': return h.para || '';
+  }
+  return '';
+}
 function renderHistorico() {
   const body = document.getElementById("histBody");
   const empty = document.getElementById("histEmpty");
   const scopeEl = document.getElementById("histScope");
-  // Toggle Minhas/Setor só para gestor+ (perfis ≥ gestor)
+  const illus = document.getElementById("illusHist");
+  if (illus && !illus.innerHTML) illus.innerHTML = ILLUS.history;
   if (scopeEl) scopeEl.innerHTML = isManagerView() ? scopeSeg() : "";
-  // Gestor em "Minhas" → só as ações dele; demais casos → tudo que a RLS entrega
-  let rows = histLog;
+
+  let rows = histLog.slice();
   if (isManagerView() && taskScope === 'minhas') {
     rows = rows.filter(h => String(h.userId) === String(currentUser.id));
   }
-  if (!rows.length) { body.innerHTML = ""; empty.style.display = "block"; return; }
+
+  // dropdown de ações distintas (preserva seleção)
+  const acaoSel = document.getElementById("histAcao");
+  if (acaoSel) {
+    const acoes = Array.from(new Set(histLog.map(h => h.acao).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    acaoSel.innerHTML = `<option value="">Todas as ações</option>` +
+      acoes.map(a => `<option value="${esc(a)}"${a === histFilt.acao ? ' selected' : ''}>${esc(a)}</option>`).join("");
+  }
+
+  const q = (histFilt.busca || '').toLowerCase();
+  rows = rows.filter(h =>
+    (!histFilt.acao || h.acao === histFilt.acao) &&
+    (!q || ((h.titulo || '') + ' ' + (h.code || '') + ' ' + nomeDe(h.userId) + ' ' + (h.acao || '') + ' ' + (h.de || '') + ' ' + (h.para || '')).toLowerCase().includes(q))
+  );
+  rows.sort((a, b) => cmpVals(histKey(a, histSort.field), histKey(b, histSort.field), histSort.asc));
+  const thead = document.querySelector('#tab-historico thead');
+  if (thead) setSortArrows(thead, histSort);
+
+  if (!rows.length) {
+    body.innerHTML = "";
+    empty.style.display = "block";
+    empty.innerHTML = `<div class="empty-illus">${ILLUS.empty}<div>${histLog.length ? 'Nenhuma movimentação para os filtros atuais.' : 'Nenhuma movimentação registrada ainda.'}</div></div>`;
+    return;
+  }
   empty.style.display = "none";
   body.innerHTML = rows.map(h => `<tr style="cursor:default">
     <td style="white-space:nowrap;font-size:.73rem;color:var(--text-dim)">${h.ts}</td>
@@ -2705,52 +2828,91 @@ async function responderSolicitacao(id, aceitar) {
     await loadNotificacoes();
   } catch (e) { alert("Falha: " + (e.message || e)); }
 }
+let solicFilt = { busca: '', status: '' };
+let solicSort = { rec: { field: 'titulo', asc: true }, env: { field: 'titulo', asc: true } };
+function onSolicFilter(field, val) { solicFilt[field] = val; renderSolicitacoes(); }
+function limparSolicFiltros() {
+  solicFilt = { busca: '', status: '' };
+  const b = document.getElementById('solicBusca'); if (b) b.value = '';
+  const s = document.getElementById('solicStatus'); if (s) s.value = '';
+  renderSolicitacoes();
+}
+function solicSortBy(which, field) {
+  const st = solicSort[which];
+  if (st.field === field) st.asc = !st.asc; else { st.field = field; st.asc = true; }
+  renderSolicitacoes();
+}
+function solicKey(s, field) {
+  switch (field) {
+    case 'titulo': return s.titulo || '';
+    case 'de': return nomeDe(s.de_user_id);
+    case 'para': return nomeDe(s.para_user_id);
+    case 'prazo': return s.prazo || '';
+    case 'status': return s.status || '';
+  }
+  return '';
+}
+function solicStatusTag(status) {
+  return status === 'aceita' ? `<span class="tag st-concluido">Aceita</span>`
+    : status === 'recusada' ? `<span class="tag rel-critica">Recusada</span>`
+    : `<span class="tag st-aguardando">Pendente</span>`;
+}
+function solicTable(which, list, isRec) {
+  const me = currentUser && currentUser.id;
+  const st = solicSort[which];
+  const cols = isRec
+    ? [['titulo', 'Demanda'], ['de', 'De'], ['prazo', 'Prazo'], ['status', 'Status']]
+    : [['titulo', 'Demanda'], ['para', 'Para'], ['prazo', 'Prazo'], ['status', 'Status']];
+  const head = cols.map(c => `<th data-field="${c[0]}" onclick="solicSortBy('${which}','${c[0]}')">${c[1]} <span class="sort-ar"></span></th>`).join('');
+  const sorted = list.slice().sort((a, b) => cmpVals(solicKey(a, st.field), solicKey(b, st.field), st.asc));
+  const rows = sorted.map(s => {
+    const demanda = `<span class="s-demanda">${esc(s.titulo)}${s.confidencial ? ' 🔒' : ''}${s.prioridade === 'critica' ? ' ⚡' : ''}</span>${s.setor ? `<div class="s-sub">${esc(s.setor)}</div>` : ''}`;
+    const pessoa = isRec ? esc(nomeDe(s.de_user_id)) : esc(nomeDe(s.para_user_id));
+    const prazo = s.prazo ? fmtDate(s.prazo) : '—';
+    let statusCell;
+    if (isRec && s.status === 'pendente' && String(s.para_user_id) === String(me)) {
+      statusCell = `<div class="s-acts"><button class="s-mini ok" onclick="responderSolicitacao(${s.id}, true)">✓ Aceitar</button><button class="s-mini no" onclick="responderSolicitacao(${s.id}, false)">✗ Recusar</button></div>`;
+    } else if (isRec && s.status === 'pendente') {
+      statusCell = `<span class="s-sub">aguardando ${esc(nomeDe(s.para_user_id))}</span>`;
+    } else {
+      statusCell = solicStatusTag(s.status) + (s.status === 'recusada' && s.obs ? `<div class="s-sub">${esc(s.obs)}</div>` : '');
+    }
+    return `<tr style="cursor:default"><td>${demanda}</td><td style="font-size:.8rem">${pessoa}</td><td style="white-space:nowrap;font-size:.78rem">${prazo}</td><td>${statusCell}</td></tr>`;
+  }).join('');
+  return `<div class="tbl-scroll"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
 function renderSolicitacoes() {
   const rec = document.getElementById("solicRecebidas");
   const env = document.getElementById("solicEnviadas");
   const cnt = document.getElementById("solicTabCount");
   const scopeEl = document.getElementById("solicScope");
+  const illus = document.getElementById("illusSolic");
   if (!rec || !env) return;
+  if (illus && !illus.innerHTML) illus.innerHTML = ILLUS.inbox;
   const me = currentUser && currentUser.id;
   const manager = isManagerView();
   if (scopeEl) scopeEl.innerHTML = manager ? scopeSeg() : "";   // toggle só p/ gestor+
   const teamView = manager && taskScope === 'equipe';           // "Setor" = liderados diretos
   const lid = teamView ? lideradosIds() : new Set();
 
-  // O badge sempre reflete o que aguarda MINHA resposta
   const minhasPend = solicPendentesRecebidas();
   if (cnt) cnt.textContent = minhasPend.length ? `(${minhasPend.length})` : "";
 
-  // Recebidas pendentes: as minhas (acionáveis) + (se Setor) as dos liderados (read-only)
-  const recebidas = solicitacoes.filter(s => s.status === "pendente" &&
-    (String(s.para_user_id) === String(me) || lid.has(s.para_user_id)));
-  rec.innerHTML = recebidas.length ? recebidas.map(s => {
-    const pr = s.prioridade || "media";
-    const ehMinha = String(s.para_user_id) === String(me);
-    const acoes = ehMinha
-      ? `<div class="ac-actions"><button class="btn-approve" onclick="responderSolicitacao(${s.id}, true)">✓ Aceitar</button><button class="btn-reject" onclick="responderSolicitacao(${s.id}, false)">✗ Recusar</button></div>`
-      : `<div style="font-size:.75rem;color:var(--text-dim)">Para <b>${esc(nomeDe(s.para_user_id))}</b> · aguardando resposta dele(a)</div>`;
-    return `<div class="appr-card">
-      <div class="ac-top"><h4>${esc(s.titulo)}${s.confidencial ? ' 🔒' : ''}</h4>${pr === "critica" ? '<span class="tag pri-critica">⚡ Prioridade</span>' : ''}</div>
-      <div class="ac-meta"><span>De: <b>${esc(nomeDe(s.de_user_id))}</b></span>${s.setor ? `<span>Setor: <b>${esc(s.setor)}</b></span>` : ""}${s.prazo ? `<span>Prazo sugerido: <b>${fmtDate(s.prazo)}</b></span>` : ""}</div>
-      ${s.descricao ? `<div style="font-size:.8rem;color:var(--text-dim);margin-bottom:14px">${esc(s.descricao)}</div>` : ""}
-      ${acoes}
-    </div>`;
-  }).join("") : `<div class="appr-empty">Nenhuma solicitação pendente. 🎉</div>`;
+  const q = (solicFilt.busca || '').toLowerCase();
+  const passa = s => (!solicFilt.status || s.status === solicFilt.status) &&
+    (!q || ((s.titulo || '') + ' ' + nomeDe(s.de_user_id) + ' ' + nomeDe(s.para_user_id) + ' ' + (s.setor || '')).toLowerCase().includes(q));
 
-  // Enviadas: as minhas + (se Setor) as dos liderados
-  const enviadas = solicitacoes
-    .filter(s => String(s.de_user_id) === String(me) || lid.has(s.de_user_id))
-    .slice(0, 40);
-  env.innerHTML = enviadas.length ? enviadas.map(s => {
-    const st = s.status === "aceita" ? `<span class="tag st-concluido">Aceita</span>`
-      : s.status === "recusada" ? `<span class="tag rel-critica">Recusada</span>`
-      : `<span class="tag st-aguardando">Pendente</span>`;
-    const deOutro = String(s.de_user_id) !== String(me);
-    const linha = deOutro ? `${esc(nomeDe(s.de_user_id))} → ${esc(nomeDe(s.para_user_id))}` : `para ${esc(nomeDe(s.para_user_id))}`;
-    return `<div class="li"><span class="ava">${initials(nomeDe(s.para_user_id))}</span>
-      <div class="lbody"><div class="lt">${esc(s.titulo)}</div><div class="lm">${linha}${s.status === "recusada" && s.obs ? " · " + esc(s.obs) : ""}</div></div>${st}</div>`;
-  }).join("") : `<div class="empty-soft">Nenhuma solicitação enviada.</div>`;
+  const recebidas = solicitacoes.filter(s => (String(s.para_user_id) === String(me) || lid.has(s.para_user_id)) && passa(s));
+  const enviadas = solicitacoes.filter(s => (String(s.de_user_id) === String(me) || lid.has(s.de_user_id)) && passa(s));
+  const comFiltro = solicFilt.busca || solicFilt.status;
+
+  rec.innerHTML = recebidas.length ? solicTable('rec', recebidas, true)
+    : `<div class="empty-illus">${ILLUS.inbox}<div>${comFiltro ? 'Nada para os filtros atuais.' : 'Nenhuma solicitação recebida.'}</div></div>`;
+  env.innerHTML = enviadas.length ? solicTable('env', enviadas, false)
+    : `<div class="empty-illus">${ILLUS.inbox}<div>${comFiltro ? 'Nada para os filtros atuais.' : 'Nenhuma solicitação enviada.'}</div></div>`;
+
+  const recThead = rec.querySelector('thead'); if (recThead) setSortArrows(recThead, solicSort.rec);
+  const envThead = env.querySelector('thead'); if (envThead) setSortArrows(envThead, solicSort.env);
 }
 
 async function bootApp(user) {
