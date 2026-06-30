@@ -126,6 +126,22 @@
     transition: all .15s;
   }
   .btn-icon:hover { color: var(--accent); border-color: var(--accent); }
+  /* botão + painel de Filtros no cabeçalho */
+  .filtros-wrap { position: relative; }
+  .filtros-badge { position: absolute; top: -5px; right: -5px; background: var(--accent); color: #fff;
+    font-size: .6rem; min-width: 16px; height: 16px; border-radius: 99px; align-items: center;
+    justify-content: center; padding: 0 4px; font-weight: 700; }
+  .filtros-panel { position: absolute; top: calc(100% + 8px); right: 0; z-index: 70; width: 290px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-md);
+    padding: 14px; display: none; flex-direction: column; gap: 3px; max-height: 78vh; overflow-y: auto; }
+  .filtros-panel.open { display: flex; }
+  .filtros-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .filtros-head span { font-weight: 700; font-size: .92rem; }
+  .filtros-head button { background: none; border: none; color: var(--accent); cursor: pointer; font-size: .78rem; font-family: inherit; }
+  .filtros-panel label { font-size: .66rem; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); margin-top: 9px; font-weight: 700; }
+  .filtros-panel select, .filtros-panel input { width: 100%; background: var(--surface-2); border: 1px solid var(--border);
+    color: var(--text); padding: 8px 10px; border-radius: 8px; font-size: .85rem; outline: none; }
+  .filtros-panel select:focus, .filtros-panel input:focus { border-color: var(--accent); }
   .sync-chip {
     display: inline-flex; align-items: center; gap: 8px;
     background: var(--surface-2); border: 1px solid var(--border);
@@ -885,6 +901,13 @@
         <div class="bell-list" id="bellList"></div>
       </div>
     </div>
+    <div class="filtros-wrap" id="filtrosWrap" style="display:none">
+      <button class="btn-icon" id="filtrosBtn" onclick="toggleFiltros(event)" title="Filtros">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+        <span class="filtros-badge" id="filtrosBadge" style="display:none">0</span>
+      </button>
+      <div class="filtros-panel" id="filtrosPanel"></div>
+    </div>
     <button class="btn-icon" id="themeBtn" onclick="toggleTheme()" title="Alternar tema claro/escuro">🌙</button>
     <button class="btn-icon" id="fsBtn" onclick="toggleFullscreen()" title="Tela cheia">⛶</button>
     <span class="user-chip" id="userChip" title="Usuário autenticado" style="display:none">
@@ -918,9 +941,9 @@
         <button data-view="calendario" onclick="setDataView('calendario', this)">📅 Calendário</button>
         <button data-view="listagem" onclick="setDataView('listagem', this)">≣ Listagem</button>
       </span>
-      <button class="btn" onclick="openModal()" style="margin-left:auto">+ Nova demanda</button>
+      <span id="demandasScope" style="margin-left:auto"></span>
+      <button class="btn" onclick="openModal()">+ Nova demanda</button>
     </div>
-    <section class="filters" id="filtersDemandas"></section>
 
     <!-- view: quadro -->
     <div id="view-quadro" class="data-view">
@@ -1647,7 +1670,7 @@ function switchTab(id, btn) {
   document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
   if (btn) btn.classList.add("active");
   document.getElementById("tab-" + id).classList.add("active");
-  renderFilters();
+  atualizarBadgeFiltros();
   if (id === "demandas") renderDataView();
   if (id === "historico") renderHistorico();
   if (id === "aprovacoes") renderApprovals();
@@ -1666,6 +1689,8 @@ function setDataView(v, btn) {
   renderDataView();
 }
 function renderDataView() {
+  const sc = document.getElementById("demandasScope");
+  if (sc) sc.innerHTML = canToggleScope() ? scopeSeg() : "";
   if (dataView === "quadro") renderBoard();
   else if (dataView === "calendario") renderCalendar();
   else if (dataView === "listagem") renderTable();
@@ -2461,7 +2486,7 @@ function fillSelect(id, options, withEmpty) {
 
 function render() {
   renderPainel();
-  renderFilters();
+  atualizarBadgeFiltros();
   renderApprovals();
   renderSolicitacoes();
   if (activeTab === "demandas") renderDataView();
@@ -2514,47 +2539,66 @@ function scopeSeg(extraStyle) {
 const FILIAIS_FILTRO = ['GUS', 'IMB', 'PAL', 'TAM', 'AJU', 'JPA', 'PNG', 'CAU', 'BAR', 'CABO'];
 /* filial do DONO da demanda (CORP por padrão se desconhecido) */
 function demandaFilial(t) { return filialDe(PROFILES_BY_ID[t && t.userId]) || 'CORP'; }
-let FILT = { busca: '', setor: '', prioridade: '', origem: '', filial: '' };
+let FILT = { busca: '', setor: '', origem: '', solicitante: '', executante: '', prazo: '' };
 function applyFilters(list) {
   const f = FILT, q = (f.busca || '').toLowerCase();
   return list.filter(t => {
-    const fil = demandaFilial(t);
-    const ehLoja = fil !== 'CORP';
+    const ehLoja = demandaFilial(t) !== 'CORP';
     return (!q || (t.titulo + ' ' + (t.descricao || '') + ' ' + (t.code || '')).toLowerCase().includes(q)) &&
       (!f.setor || t.setor === f.setor) &&
-      (!f.prioridade || t.prioridade === f.prioridade) &&
       (!f.origem || (f.origem === 'corp' ? !ehLoja : ehLoja)) &&
-      (!f.filial || fil === f.filial);
+      (!f.solicitante || t.solicitante === f.solicitante) &&
+      (!f.executante || String(t.userId) === String(f.executante)) &&
+      (!f.prazo || (t.prazo && t.prazo.slice(0, 7) === f.prazo));
   });
 }
-function filterBarHTML() {
-  const f = FILT;
-  const sel = (cur, val, label) => `<option value="${esc(val)}"${cur === val ? ' selected' : ''}>${label}</option>`;
-  const setores = SETORES.map(s => sel(f.setor, s, esc(s))).join('');
-  const scope = canToggleScope() ? scopeSeg('margin-left:auto') : '';
-  const filialSel = f.origem === 'loja'
-    ? `<select onchange="onFilter('filial', this.value)"><option value="">Todas as filiais</option>${FILIAIS_FILTRO.map(c => sel(f.filial, c, c)).join('')}</select>`
-    : '';
-  return `
-    <input type="search" name="busca-demanda" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="🔍 Buscar demanda..." value="${f.busca ? esc(f.busca) : ''}" oninput="onFilter('busca', this.value)">
-    <select onchange="onFilter('setor', this.value)"><option value="">Todos os setores</option>${setores}</select>
-    <select onchange="onFilter('prioridade', this.value)"><option value="">Prioridade: todas</option>${sel(f.prioridade, 'critica', '⚡ Só prioritárias')}</select>
-    <select onchange="onFilter('origem', this.value)"><option value="">Corp + Loja</option>${sel(f.origem, 'corp', 'Corporativo')}${sel(f.origem, 'loja', 'Loja')}</select>
-    ${filialSel}
-    <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
-    ${scope}`;
+const MESES_ABBR = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+function mesLabel(ym) { const a = ym.split('-'); return `${MESES_ABBR[parseInt(a[1], 10) - 1]}/${a[0]}`; }
+function filtrosAtivos() { return ['busca', 'setor', 'origem', 'solicitante', 'executante', 'prazo'].filter(k => FILT[k]).length; }
+function atualizarBadgeFiltros() {
+  const b = document.getElementById('filtrosBadge'); if (!b) return;
+  const n = filtrosAtivos(); b.textContent = n; b.style.display = n ? 'inline-flex' : 'none';
 }
-function renderFilters() {
-  const el = document.getElementById('filtersDemandas');
-  if (el) el.innerHTML = filterBarHTML();
+function renderFiltrosPanel() {
+  const panel = document.getElementById('filtrosPanel'); if (!panel) return;
+  const f = FILT;
+  const sel = (cur, val, label) => `<option value="${esc(String(val))}"${String(cur) === String(val) ? ' selected' : ''}>${esc(label)}</option>`;
+  const setores = SETORES.map(s => sel(f.setor, s, s)).join('');
+  const solics = Array.from(new Set(tasks.map(t => t.solicitante).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const execs = Array.from(new Set(tasks.map(t => t.userId).filter(Boolean)))
+    .map(id => ({ id, nome: ownerName(id) })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  const meses = Array.from(new Set(tasks.map(t => t.prazo).filter(Boolean).map(p => p.slice(0, 7)))).sort();
+  panel.innerHTML = `
+    <div class="filtros-head"><span>Filtros</span><button type="button" onclick="limparFiltros()">Limpar</button></div>
+    <label>Buscar</label>
+    <input type="search" id="fBusca" autocomplete="off" placeholder="Título, descrição ou código..." value="${f.busca ? esc(f.busca) : ''}" oninput="onFilter('busca', this.value)">
+    <label>Grupo</label>
+    <select onchange="onFilter('origem', this.value)"><option value="">Todos</option>${sel(f.origem, 'corp', 'Corp')}${sel(f.origem, 'loja', 'Loja')}</select>
+    <label>Setor</label>
+    <select onchange="onFilter('setor', this.value)"><option value="">Todos os setores</option>${setores}</select>
+    <label>Solicitante</label>
+    <select onchange="onFilter('solicitante', this.value)"><option value="">Todos</option>${solics.map(s => sel(f.solicitante, s, s)).join('')}</select>
+    <label>Executante</label>
+    <select onchange="onFilter('executante', this.value)"><option value="">Todos</option>${execs.map(o => sel(f.executante, o.id, o.nome)).join('')}</select>
+    <label>Prazo</label>
+    <select onchange="onFilter('prazo', this.value)"><option value="">Qualquer</option>${meses.map(m => sel(f.prazo, m, mesLabel(m))).join('')}</select>`;
+}
+function toggleFiltros(e) {
+  if (e) e.stopPropagation();
+  const panel = document.getElementById('filtrosPanel');
+  if (panel.classList.toggle('open')) renderFiltrosPanel();
 }
 function onFilter(field, val) {
   FILT[field] = val;
-  if (field === 'origem') { if (val !== 'loja') FILT.filial = ''; renderFilters(); }  // mostra/oculta filtro de filial
+  atualizarBadgeFiltros();
+  renderPainel();
   renderActiveDataView();
 }
 function renderActiveDataView() { renderDataView(); }
-function limparFiltros() { FILT = { busca: '', setor: '', prioridade: '', origem: '', filial: '' }; renderFilters(); renderActiveDataView(); }
+function limparFiltros() {
+  FILT = { busca: '', setor: '', origem: '', solicitante: '', executante: '', prazo: '' };
+  renderFiltrosPanel(); atualizarBadgeFiltros(); renderPainel(); renderActiveDataView();
+}
 function calScroll(dir) { const k = document.getElementById('calKanban'); if (k) k.scrollBy({ left: dir * 264, behavior: 'smooth' }); }
 
 /* ══════════ PAINEL (storytelling, por perfil) ══════════ */
@@ -2713,7 +2757,7 @@ function renderPainel() {
   if (!el || !currentUser) return;
   const setorView = taskScope === 'equipe';
   const solicView = taskScope === 'solicitadas';
-  const mine = scopeApply(tasks);  // 'minhas' → próprias; 'equipe' → setor; 'solicitadas' → as que eu pedi
+  const mine = applyFilters(scopeApply(tasks));  // escopo + filtros do cabeçalho (Grupo/Setor/Solicitante/Executante/Prazo/Busca)
   const ps = painelStats(mine);
   const manager = isManagerView();
   const nome = firstName(currentUser.nome || currentUser.email);
@@ -2775,6 +2819,9 @@ document.addEventListener("click", e => {
   const combo = document.getElementById("iParaCombo");
   const res = document.getElementById("iParaResults");
   if (res && combo && !combo.contains(e.target)) res.style.display = "none";
+  const fw = document.getElementById("filtrosWrap");
+  const fp = document.getElementById("filtrosPanel");
+  if (fp && fw && fp.classList.contains("open") && !fw.contains(e.target)) fp.classList.remove("open");
 });
 
 applyTheme(localStorage.getItem("theme") || "light");
@@ -2819,6 +2866,7 @@ function showUser(user) {
   document.getElementById("userChip").style.display = email ? "inline-flex" : "none";
   document.getElementById("gearBtn").style.display = email ? "inline-flex" : "none";
   document.getElementById("bellWrap").style.display = email ? "block" : "none";
+  document.getElementById("filtrosWrap").style.display = email ? "inline-flex" : "none";
   updateRoleUI();
 }
 
