@@ -1877,6 +1877,49 @@ function attachDnD() {
 }
 
 /* ══════════ MODAL ══════════ */
+// "Para quem": agrupado por setor (optgroup) nesta ordem; líder(es) primeiro, depois alfabético; com cargo.
+const SETOR_ORDEM_PARA = [
+  ["Diretoria", "Diretoria"],
+  ["CI, Riscos e Compliance", "Controles Internos, Riscos & Compliance"],
+  ["ESG", "ESG"],
+  ["Auditoria Interna", "Auditoria Interna"],
+  ["Dados", "Dados"],
+  ["Segurança da Informação", "Segurança da Informação"],
+  ["Auditoria/Loja", "Auditoria | Loja"],
+];
+function cargoDe(p) {
+  if (p && p.cargo) return p.cargo;
+  const r = p && rosterByMat(p.matricula);
+  return (r && r.cargo) || "";
+}
+function pessoaParaLabel(p) {
+  const c = cargoDe(p);
+  return c ? `${p.nome} | ${c}` : p.nome;
+}
+function buildParaOptions(meId) {
+  const ehLider = p => p.perfil === 'gestor' || p.perfil === 'gestor_master';
+  let html = `<option value="">Selecione a pessoa...</option>`;
+  const me = meId && PROFILES_BY_ID[meId];
+  if (me) html += `<option value="${me.id}">${esc(me.nome)} (você)</option>`;
+  const todos = Object.values(PROFILES_BY_ID).filter(p => p.matricula !== '0' && String(p.id) !== String(meId));
+  const conhecidos = new Set(SETOR_ORDEM_PARA.map(x => x[0]));
+  const ordenaGrupo = arr => arr.sort((a, b) =>
+    ((ehLider(b) ? 1 : 0) - (ehLider(a) ? 1 : 0)) || (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+  SETOR_ORDEM_PARA.forEach(([s, label]) => {
+    const grupo = ordenaGrupo(todos.filter(p => p.setor === s));
+    if (!grupo.length) return;
+    html += `<optgroup label="${esc(label)}">`
+      + grupo.map(p => `<option value="${p.id}">${esc(pessoaParaLabel(p))}</option>`).join("")
+      + `</optgroup>`;
+  });
+  const resto = ordenaGrupo(todos.filter(p => !conhecidos.has(p.setor)));
+  if (resto.length) {
+    html += `<optgroup label="Outros">`
+      + resto.map(p => `<option value="${p.id}">${esc(pessoaParaLabel(p))}</option>`).join("")
+      + `</optgroup>`;
+  }
+  return html;
+}
 function openModal(id) {
   editingId = id || null;
   document.getElementById("modalTitle").textContent = id ? "Editar demanda" : "Nova demanda";
@@ -1911,15 +1954,7 @@ function openModal(id) {
   } else {
     applyReadOnly(false);
     paraRow.style.display = "block";
-    const me = currentUser && currentUser.id;
-    const meNome = currentUser ? (currentUser.nome || "Você") : "Você";
-    let opts = `<option value="">Selecione a pessoa...</option>`;
-    if (me) opts += `<option value="${me}">${esc(meNome)} (você)</option>`;
-    const others = Object.values(PROFILES_BY_ID)
-      .filter(p => String(p.id) !== String(me) && p.matricula !== '0')
-      .sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
-    opts += others.map(p => `<option value="${p.id}">${esc(p.nome)}</option>`).join("");
-    document.getElementById("iPara").innerHTML = opts;
+    document.getElementById("iPara").innerHTML = buildParaOptions(currentUser && currentUser.id);
     setupApprovalBox(null);
     onParaChange();
   }
