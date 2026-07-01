@@ -646,6 +646,7 @@
   .brand-fc .logo img { width: 100%; height: 100%; border-radius: 50%; display: block; object-fit: cover; }
   .brand-fc .wm { font-size: .9rem; font-weight: 700; line-height: 1.2; }
   .brand-fc .wm span { display: block; font-size: .65rem; color: var(--text-mute); font-weight: 500; }
+  .brand-fc .wm .wm-ver { font-size: .56rem; font-weight: 400; opacity: .6; letter-spacing: .3px; margin-top: 1px; }
   .close-btn:hover { color: var(--accent-bright) !important; border-color: var(--accent-bright) !important; }
   .new-btn { background: var(--accent); border-color: var(--accent); color: #fff; font-size: 1.3rem; font-weight: 700; line-height: 1; }
   .new-btn:hover { background: var(--accent-bright); border-color: var(--accent-bright); color: #fff; }
@@ -903,7 +904,7 @@
 <header class="chrome">
   <div class="brand-fc">
     <span class="logo"><img src="logo-fc.png" alt="Ferreira Costa"></span>
-    <div class="wm">Gestão de Demandas<span>Auditoria, Riscos & Compliance</span></div>
+    <div class="wm">Gestão de Demandas<span>Auditoria, Riscos & Compliance</span><span class="wm-ver" id="appVersion"></span></div>
   </div>
   <div class="header-actions">
     <div class="sync-chip" id="syncChip" onclick="refreshData()" title="Clique para atualizar os dados">
@@ -1271,6 +1272,18 @@ const SB_URL = 'https://xtpirxyjmqwcvjlcajsz.supabase.co';
 const SB_KEY = 'sb_publishable_OOb1PSmtQi25vI9G5ioEfA_-U5SZF8z';
 const sb = window.supabase ? window.supabase.createClient(SB_URL, SB_KEY) : null;
 let sbOnline = false;
+
+/* Versão do app — AUTOMÁTICA: derivada da data de publicação do arquivo
+   (document.lastModified muda sozinho a cada deploy no GitHub Pages).
+   Não precisa editar nada. APP_VERSION fica só como fallback. */
+const APP_VERSION = 'v1.0';
+function versaoApp() {
+  const d = new Date(document.lastModified);
+  if (isNaN(d.getTime())) return APP_VERSION;
+  const p = n => String(n).padStart(2, '0');
+  return `v${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+{ const _v = document.getElementById('appVersion'); if (_v) _v.textContent = versaoApp(); }
 
 /* SETORES vem do roster.js (fonte única) */
 const STATUS = [
