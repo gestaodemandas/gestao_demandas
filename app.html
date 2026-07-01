@@ -444,7 +444,11 @@
     background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
     width: 100%; max-width: 560px; padding: 26px;
     max-height: calc(100vh - 100px); overflow-y: auto;
+    position: relative;
   }
+  .modal-x { position: absolute; top: 14px; right: 14px; background: none; border: none;
+    color: var(--text-dim); font-size: 1.1rem; cursor: pointer; line-height: 1; padding: 4px 8px; border-radius: 8px; }
+  .modal-x:hover { color: var(--accent); background: var(--surface-2); }
   .modal h2 { font-size: 1.05rem; margin-bottom: 20px; }
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .form-grid .full { grid-column: 1 / -1; }
@@ -785,6 +789,16 @@
   .sh-meta { font-size: .7rem; color: var(--text-dim); margin-top: 5px; }
   .sh-motivo { font-size: .78rem; color: var(--text); margin-top: 6px; line-height: 1.4; padding-top: 6px; border-top: 1px dashed var(--border); }
   .sh-motivo.sh-vazio { color: var(--text-mute); font-style: italic; }
+  /* comentários (chat da demanda) */
+  .coment-box { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px 2px 8px; }
+  .cmt { display: flex; }
+  .cmt-eu { justify-content: flex-end; }
+  .cmt-bubble { max-width: 80%; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 8px 11px; }
+  .cmt-eu .cmt-bubble { background: var(--accent-soft); border-color: rgba(200,32,58,.25); }
+  .cmt-head { font-size: .64rem; color: var(--text-mute); margin-bottom: 3px; }
+  .cmt-txt { font-size: .85rem; color: var(--text); line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
+  .coment-add { display: flex; gap: 8px; margin-top: 10px; }
+  .coment-add input { flex: 1; }
 
   /* barra de progresso no card */
   .t-prog { margin: 8px 0 2px; }
@@ -1089,8 +1103,9 @@
 </div>
 
 <!-- Modal -->
-<div class="overlay" id="overlay" onclick="if(event.target===this) closeModal()">
+<div class="overlay" id="overlay">
   <div class="modal">
+    <button type="button" class="modal-x" onclick="closeModal()" title="Fechar" aria-label="Fechar">✕</button>
     <h2 id="modalTitle">Nova demanda</h2>
     <div id="roBanner" style="display:none;margin:0 0 14px;padding:10px 12px;border-radius:8px;background:var(--lblue-soft,rgba(95,176,232,.12));color:var(--lblue,#5fb0e8);font-size:.82rem;border:1px solid rgba(95,176,232,.3)">👁 Somente leitura — você está acompanhando uma demanda que solicitou. Quem edita é o responsável.</div>
     <form id="taskForm" onsubmit="saveTask(event)">
@@ -1098,6 +1113,7 @@
         <button type="button" class="mtab active" data-mtab="criacao" onclick="setModalTab('criacao')">Criação</button>
         <button type="button" class="mtab" data-mtab="execucao" onclick="setModalTab('execucao')">Execução</button>
         <button type="button" class="mtab" data-mtab="historico" id="mtabHistBtn" onclick="setModalTab('historico')">Histórico</button>
+        <button type="button" class="mtab" data-mtab="comentarios" id="mtabComentBtn" onclick="setModalTab('comentarios')">Comentários</button>
       </div>
 
       <!-- ABA: CRIAÇÃO -->
@@ -1187,6 +1203,14 @@
       <div class="modal-tab" id="mtab-historico" style="display:none">
         <div style="font-size:.78rem;color:var(--text-dim);margin-bottom:12px">Todas as mudanças de status desta demanda, com a justificativa de cada uma.</div>
         <div id="statusHistBox"></div>
+      </div>
+      <!-- ABA: COMENTÁRIOS (chat da demanda) -->
+      <div class="modal-tab" id="mtab-comentarios" style="display:none">
+        <div id="comentBox" class="coment-box"></div>
+        <div class="coment-add" id="comentAdd" style="display:none">
+          <input type="text" id="comentNovo" autocomplete="off" placeholder="Escreva um comentário..." onkeydown="if(event.key==='Enter'){event.preventDefault();enviarComentario()}">
+          <button type="button" class="btn" onclick="enviarComentario()">Enviar</button>
+        </div>
       </div>
       <div class="modal-actions">
         <button type="button" class="btn btn-danger" id="btnDelete" style="display:none" onclick="deleteTask()">Excluir</button>
@@ -2151,10 +2175,55 @@ function closeModal() {
 }
 function setModalTab(name) {
   document.querySelectorAll(".modal-tabs .mtab").forEach(b => b.classList.toggle("active", b.dataset.mtab === name));
-  ["criacao", "execucao", "historico"].forEach(n => {
+  ["criacao", "execucao", "historico", "comentarios"].forEach(n => {
     const el = document.getElementById("mtab-" + n); if (el) el.style.display = (n === name) ? "" : "none";
   });
-  if (name === "historico") renderHistStatus(editingId ? tasks.find(x => String(x.id) === String(editingId)) : null);
+  const t = editingId ? tasks.find(x => String(x.id) === String(editingId)) : null;
+  if (name === "historico") renderHistStatus(t);
+  if (name === "comentarios") renderComentarios(t);
+}
+async function renderComentarios(t) {
+  const box = document.getElementById("comentBox");
+  const add = document.getElementById("comentAdd");
+  if (!box) return;
+  if (!t || !t.id) {
+    box.innerHTML = `<div class="empty-illus">${ILLUS.history}<div>Os comentários aparecem após a demanda ser criada.</div></div>`;
+    if (add) add.style.display = "none";
+    return;
+  }
+  if (add) add.style.display = "flex";
+  box.innerHTML = `<div class="empty-soft">Carregando comentários...</div>`;
+  let rows = [];
+  if (sb) {
+    try {
+      const { data } = await sb.from("comentarios").select("*").eq("demanda_id", t.id).order("created_at", { ascending: true });
+      rows = data || [];
+    } catch (e) { /* silencioso */ }
+  }
+  if (!rows.length) { box.innerHTML = `<div class="empty-illus">${ILLUS.history}<div>Nenhum comentário ainda. Seja o primeiro.</div></div>`; return; }
+  const meId = String(currentUser && currentUser.id);
+  box.innerHTML = rows.map(c => {
+    const eu = String(c.user_id) === meId;
+    const d = new Date(c.created_at); const p = n => String(n).padStart(2, "0");
+    const ts = isNaN(d.getTime()) ? "" : `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    return `<div class="cmt ${eu ? 'cmt-eu' : ''}">
+      <div class="cmt-bubble"><div class="cmt-head">${esc(nomeDe(c.user_id))} · ${ts}</div><div class="cmt-txt">${esc(c.texto)}</div></div>
+    </div>`;
+  }).join("");
+  box.scrollTop = box.scrollHeight;
+}
+async function enviarComentario() {
+  if (!editingId) return;
+  const inp = document.getElementById("comentNovo");
+  const texto = (inp && inp.value || "").trim();
+  if (!texto) return;
+  if (!sb) { alert("Sem conexão com o servidor."); return; }
+  try {
+    const { error } = await sb.from("comentarios").insert([{ demanda_id: editingId, user_id: currentUser && currentUser.id, texto }]);
+    if (error) throw error;
+    inp.value = "";
+    await renderComentarios(tasks.find(x => String(x.id) === String(editingId)));
+  } catch (e) { alert("Falha ao comentar: " + (e.message || e)); }
 }
 async function renderHistStatus(t) {
   const box = document.getElementById("statusHistBox");
@@ -2232,15 +2301,15 @@ function podeEditarCampos3(t) {
 function applyPermissoes(t) {
   const me = String(currentUser && currentUser.id);
   const admin = currentUser && (currentUser.perfil === 'desenvolvedor' || currentUser.perfil === 'gestor_master');
-  const exec = admin || isManagerView() || String(t.userId) === me;            // título, descrição, status, pasta
-  const campos3 = podeEditarCampos3(t);                                        // prazo, prioridade, confidencial
-  ['iTitulo', 'iDescricao', 'iStatus', 'iPasta'].forEach(id => { const el = document.getElementById(id); if (el) el.disabled = !exec; });
-  ['iPrazo', 'iPrioridade', 'iConfidencial'].forEach(id => { const el = document.getElementById(id); if (el) el.disabled = !campos3; });
+  const exec = admin || isManagerView() || String(t.userId) === me;            // execução: status, pasta
+  const solic = podeEditarCampos3(t);                                          // definição: título, descrição, prazo, prioridade, confidencial + excluir (solicitante + gestor direto + admin/master)
+  ['iStatus', 'iPasta'].forEach(id => { const el = document.getElementById(id); if (el) el.disabled = !exec; });
+  ['iTitulo', 'iDescricao', 'iPrazo', 'iPrioridade', 'iConfidencial'].forEach(id => { const el = document.getElementById(id); if (el) el.disabled = !solic; });
   const saveBtn = document.getElementById("saveBtn");
-  saveBtn.style.display = (exec || campos3) ? '' : 'none';
+  saveBtn.style.display = (exec || solic) ? '' : 'none';
   saveBtn.disabled = false; saveBtn.textContent = 'Salvar';
-  document.getElementById("btnDelete").style.display = exec ? 'inline-block' : 'none';
-  const ro = !exec && !campos3 && !podeGerirSubt(t);
+  document.getElementById("btnDelete").style.display = solic ? 'inline-block' : 'none';  // excluir: só solicitante + gestor direto + admin
+  const ro = !exec && !solic && !podeGerirSubt(t);
   const banner = document.getElementById("roBanner");
   if (banner) banner.style.display = ro ? 'block' : 'none';
 }
@@ -2410,8 +2479,8 @@ async function saveTask(e) {
     const _admin = currentUser && (currentUser.perfil === 'desenvolvedor' || currentUser.perfil === 'gestor_master');
     const _exec = _admin || isManagerView() || String(task.userId) === _me;
     const _campos3 = podeEditarCampos3(task);
-    if (!_campos3) { data.prazo = task.prazo; data.prioridade = task.prioridade; data.confidencial = task.confidencial; }
-    if (!_exec) { data.titulo = task.titulo; data.descricao = task.descricao; data.status = task.status; data.pasta = task.pasta; }
+    if (!_campos3) { data.titulo = task.titulo; data.descricao = task.descricao; data.prazo = task.prazo; data.prioridade = task.prioridade; data.confidencial = task.confidencial; }
+    if (!_exec) { data.status = task.status; data.pasta = task.pasta; }
     const oldStatus = task.status, oldProg = task.progresso || 0;
     if (data.status !== oldStatus) {
       const motivo = pedirMotivoStatus(STATUS_LABEL[oldStatus], STATUS_LABEL[data.status]);
