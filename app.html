@@ -1322,7 +1322,7 @@ function nextCode() {
   return "DEM-" + String(seqCounter).padStart(3, "0");
 }
 function uid() { return "local-" + Math.random().toString(36).slice(2, 9); }
-function isLocalId(id) { return String(id).startsWith("local-") || String(id).startsWith("d"); }
+function isLocalId(id) { return String(id).startsWith("local-"); }  // id local = só o do uid(); UUIDs reais podem começar com 'd' (não são locais!)
 function today() { const d = new Date(); const p = n => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; }  // data LOCAL (não UTC — evita "atrasada" no fim da tarde)
 function nowStr() {
   const d = new Date();
