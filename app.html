@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gestão de Demandas — Auditoria, Riscos & Compliance</title>
+<title>Gestão de Demandas Estratégicas — Auditoria, Riscos & Compliance</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="roster.js"></script>
 <style>
@@ -884,7 +884,7 @@
 <!-- ── TELA DE LOGIN ── -->
 <div class="login-overlay" id="loginOverlay">
   <div class="login-card">
-    <div class="brand">Gestão de Demandas <span>·</span></div>
+    <div class="brand">Gestão de Demandas Estratégicas <span>·</span></div>
     <div class="brand-sub">Auditoria, Riscos & Compliance</div>
     <form id="loginForm" onsubmit="doLogin(event)">
       <label>Matrícula</label>
@@ -904,7 +904,7 @@
 <header class="chrome">
   <div class="brand-fc">
     <span class="logo"><img src="logo-fc.png" alt="Ferreira Costa"></span>
-    <div class="wm">Gestão de Demandas<span>Auditoria, Riscos & Compliance</span><span class="wm-ver" id="appVersion"></span></div>
+    <div class="wm">Gestão de Demandas Estratégicas<span>Auditoria, Riscos & Compliance</span><span class="wm-ver" id="appVersion"></span></div>
   </div>
   <div class="header-actions">
     <div class="sync-chip" id="syncChip" onclick="refreshData()" title="Clique para atualizar os dados">
@@ -1323,7 +1323,7 @@ function nextCode() {
 }
 function uid() { return "local-" + Math.random().toString(36).slice(2, 9); }
 function isLocalId(id) { return String(id).startsWith("local-") || String(id).startsWith("d"); }
-function today() { return new Date().toISOString().slice(0, 10); }
+function today() { const d = new Date(); const p = n => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; }  // data LOCAL (não UTC — evita "atrasada" no fim da tarde)
 function nowStr() {
   const d = new Date();
   const p = n => String(n).padStart(2, "0");
