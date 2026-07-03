@@ -951,6 +951,18 @@
         <div class="bell-list" id="bellList"></div>
       </div>
     </div>
+    <div class="bell-wrap" id="mencoesWrap" style="display:none">
+      <button class="btn-icon bell-btn" id="mencoesBtn" onclick="toggleMencoes(event)" title="Menções">
+        💬<span class="bell-badge" id="mencoesBadge" style="display:none">0</span>
+      </button>
+      <div class="bell-dropdown" id="mencoesDropdown">
+        <div class="bell-head">
+          <span>Menções</span>
+          <button onclick="markAllMencoesRead()">Marcar todas como lidas</button>
+        </div>
+        <div class="bell-list" id="mencoesList"></div>
+      </div>
+    </div>
     <div class="filtros-wrap" id="filtrosWrap" style="display:none">
       <button class="btn-icon" id="filtrosBtn" onclick="toggleFiltros(event)" title="Filtros">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
@@ -3161,6 +3173,7 @@ function showUser(user) {
   document.getElementById("userChip").style.display = email ? "inline-flex" : "none";
   document.getElementById("gearBtn").style.display = email ? "inline-flex" : "none";
   document.getElementById("bellWrap").style.display = email ? "block" : "none";
+  document.getElementById("mencoesWrap").style.display = email ? "block" : "none";
   document.getElementById("filtrosWrap").style.display = email ? "inline-flex" : "none";
   updateRoleUI();
 }
@@ -3287,6 +3300,7 @@ function abrirNotificacao(nid) {
   const n = notifs.find(x => String(x.id) === String(nid));
   if (!n) return;
   document.getElementById("bellDropdown").classList.remove("open");
+  document.getElementById("mencoesDropdown").classList.remove("open");
   marcarNotifLida(n);
   const code = n.demanda_code;
 
@@ -3318,32 +3332,62 @@ function abrirDemandaPorCode(code, aba) {
   openModal(t.id);
   if (aba) setModalTab(aba);
 }
+const NOTIF_ICO = { enviada: "📤", aprovacao_solicitada: "🔔", aprovada: "✅", reprovada: "⛔", info: "ℹ️", solicitacao_recebida: "📨", solicitacao_aceita: "✅", solicitacao_recusada: "⛔", mencao: "💬", status_demanda: "🔁" };
+function notifRow(n) {
+  return `<div class="notif unread n-${n.tipo}${notifTemDestino(n) ? ' notif-click' : ''}" onclick="abrirNotificacao(${n.id})">
+    <div class="n-ico">${NOTIF_ICO[n.tipo] || "•"}</div>
+    <div class="n-body"><div class="n-msg">${esc(n.mensagem)}</div><div class="n-time">${fmtNotifTime(n.created_at)}${notifTemDestino(n) ? ' · toque para abrir' : ''}</div></div>
+  </div>`;
+}
+/* Sino: todas as notificações, EXCETO menções (que têm ícone próprio). */
 function renderBell() {
-  const naoLidas = notifs.filter(n => !n.lida);
+  const naoLidas = notifs.filter(n => !n.lida && n.tipo !== 'mencao');
   const badge = document.getElementById("bellBadge");
   badge.style.display = naoLidas.length ? "flex" : "none";
   badge.textContent = naoLidas.length > 9 ? "9+" : naoLidas.length;
   const list = document.getElementById("bellList");
-  if (!naoLidas.length) { list.innerHTML = `<div class="bell-empty">Nenhuma notificação nova.</div>`; return; }
-  const ico = { enviada: "📤", aprovacao_solicitada: "🔔", aprovada: "✅", reprovada: "⛔", info: "ℹ️", solicitacao_recebida: "📨", solicitacao_aceita: "✅", solicitacao_recusada: "⛔", mencao: "💬", status_demanda: "🔁" };
-  list.innerHTML = naoLidas.map(n => `<div class="notif unread n-${n.tipo}${notifTemDestino(n) ? ' notif-click' : ''}" onclick="abrirNotificacao(${n.id})">
-    <div class="n-ico">${ico[n.tipo] || "•"}</div>
-    <div class="n-body"><div class="n-msg">${esc(n.mensagem)}</div><div class="n-time">${fmtNotifTime(n.created_at)}${notifTemDestino(n) ? ' · toque para abrir' : ''}</div></div>
-  </div>`).join("");
+  list.innerHTML = naoLidas.length ? naoLidas.map(notifRow).join("")
+    : `<div class="bell-empty">Nenhuma notificação nova.</div>`;
+  renderMencoes();
+}
+/* Balão de conversa: só menções (@). */
+function renderMencoes() {
+  const naoLidas = notifs.filter(n => !n.lida && n.tipo === 'mencao');
+  const badge = document.getElementById("mencoesBadge");
+  if (!badge) return;
+  badge.style.display = naoLidas.length ? "flex" : "none";
+  badge.textContent = naoLidas.length > 9 ? "9+" : naoLidas.length;
+  const list = document.getElementById("mencoesList");
+  list.innerHTML = naoLidas.length ? naoLidas.map(notifRow).join("")
+    : `<div class="bell-empty">Nenhuma menção nova.</div>`;
 }
 function toggleBell(e) {
   e.stopPropagation();
+  document.getElementById("mencoesDropdown").classList.remove("open");
   document.getElementById("bellDropdown").classList.toggle("open");
 }
+function toggleMencoes(e) {
+  e.stopPropagation();
+  document.getElementById("bellDropdown").classList.remove("open");
+  document.getElementById("mencoesDropdown").classList.toggle("open");
+}
 async function markAllRead() {
-  const ids = notifs.filter(n => !n.lida).map(n => n.id);
+  const ids = notifs.filter(n => !n.lida && n.tipo !== 'mencao').map(n => n.id);
   if (!ids.length) return;
-  notifs.forEach(n => n.lida = true); renderBell();
+  notifs.forEach(n => { if (n.tipo !== 'mencao') n.lida = true; }); renderBell();
+  if (sb) { try { await sb.from("notificacoes").update({ lida: true }).in("id", ids); } catch (e) {} }
+}
+async function markAllMencoesRead() {
+  const ids = notifs.filter(n => !n.lida && n.tipo === 'mencao').map(n => n.id);
+  if (!ids.length) return;
+  notifs.forEach(n => { if (n.tipo === 'mencao') n.lida = true; }); renderMencoes();
   if (sb) { try { await sb.from("notificacoes").update({ lida: true }).in("id", ids); } catch (e) {} }
 }
 document.addEventListener("click", e => {
   const w = document.getElementById("bellWrap");
   if (w && !w.contains(e.target)) document.getElementById("bellDropdown").classList.remove("open");
+  const m = document.getElementById("mencoesWrap");
+  if (m && !m.contains(e.target)) document.getElementById("mencoesDropdown").classList.remove("open");
 });
 
 /* ── Aprovações pendentes (para gestores) ── */
