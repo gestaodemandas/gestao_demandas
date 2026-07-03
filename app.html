@@ -865,9 +865,18 @@
     border-radius: 10px; box-shadow: var(--shadow-md); padding: 4px; }
   .combo-group { font-size: .62rem; text-transform: uppercase; letter-spacing: .8px; color: var(--text-mute);
     padding: 8px 10px 4px; font-weight: 700; }
-  .combo-item { padding: 8px 10px; border-radius: 7px; font-size: .85rem; cursor: pointer; }
+  .combo-item { padding: 8px 10px; border-radius: 7px; font-size: .85rem; cursor: pointer; display: flex; align-items: center; gap: 8px; }
   .combo-item:hover { background: var(--accent-soft); color: var(--accent); }
+  .combo-item .ck { width: 15px; height: 15px; flex: none; border: 1.5px solid var(--border); border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: .7rem; color: #fff; }
+  .combo-item.sel .ck { background: var(--accent); border-color: var(--accent); }
+  .combo-item.sel { color: var(--accent); font-weight: 600; }
   .combo-empty { padding: 12px 10px; font-size: .8rem; color: var(--text-mute); }
+  /* chips das pessoas selecionadas no "Para quem" */
+  .para-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .para-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent); font-size: .78rem; font-weight: 600; }
+  .para-chip button { border: none; background: none; color: inherit; cursor: pointer; font-size: .9rem; line-height: 1; padding: 0; opacity: .7; }
+  .para-chip button:hover { opacity: 1; }
   .form-dim { opacity: .4; filter: saturate(.5); pointer-events: none; transition: opacity .2s ease, filter .2s ease; }
   .auto-block { display: grid; grid-template-columns: repeat(3, 1fr); padding: 12px 14px;
     background: var(--accent-soft); border: 1px solid rgba(200,32,58,.25); border-radius: var(--radius); }
@@ -1120,11 +1129,12 @@
       <!-- ABA: CRIAÇÃO -->
       <div class="modal-tab" id="mtab-criacao">
         <div class="full" id="iParaRow" style="margin-bottom:16px">
-          <label>Para quem</label>
+          <label>Para quem <span style="font-weight:400;opacity:.6">(pode marcar mais de uma pessoa)</span></label>
           <div class="combo" id="iParaCombo">
             <input type="text" id="iParaBusca" autocomplete="off" placeholder="Buscar colaborador por nome..." oninput="filtrarPara()" onfocus="abrirPara()" onclick="event.stopPropagation(); abrirPara()">
             <div class="combo-list" id="iParaResults" style="display:none"></div>
           </div>
+          <div class="para-chips" id="iParaChips"></div>
           <input type="hidden" id="iPara">
           <div class="para-hint" id="iParaHint">Escolha quem vai cuidar da demanda para liberar o restante.</div>
         </div>
@@ -1853,7 +1863,15 @@ function renderBoard() {
   const base = applyFilters(scopeApply(tasks));
 
   board.innerHTML = STATUS.map(col => {
-    const items = base.filter(t => t.status === col.id);
+    // prazo mais antigo primeiro; em "concluído" a ordem é invertida; sem prazo vai pro fim
+    const asc = col.id !== 'concluido';
+    const items = base.filter(t => t.status === col.id).sort((a, b) => {
+      const pa = a.prazo || '', pb = b.prazo || '';
+      if (!pa && !pb) return 0;
+      if (!pa) return 1;
+      if (!pb) return -1;
+      return asc ? pa.localeCompare(pb) : pb.localeCompare(pa);
+    });
     const cards = items.map(t => {
       const late = t.status !== "concluido" && t.prazo && t.prazo < today();
       const subs = SUBT_BY_DEMANDA[String(t.id)] || [];
@@ -1988,6 +2006,8 @@ function pessoaParaLabel(p) {
 }
 /* lista pesquisável do "Para quem": [{id, nome, label, setor(label do grupo), ord}] */
 let PARA_LISTA = [];
+let paraSel = [];   // pessoas marcadas no "Para quem" (multi-seleção): [{id, nome}]
+function paraSelHas(id) { return paraSel.some(x => String(x.id) === String(id)); }
 function montarParaLista(meId) {
   const ehLider = p => p.perfil === 'gestor' || p.perfil === 'gestor_master';
   const ordena = arr => arr.sort((a, b) =>
@@ -2013,18 +2033,41 @@ function renderPara(q) {
   let html = '', lastSetor = null;
   list.forEach(x => {
     if (x.setor !== lastSetor) { if (x.setor) html += `<div class="combo-group">${esc(x.setor)}</div>`; lastSetor = x.setor; }
-    html += `<div class="combo-item" data-id="${esc(String(x.id))}" data-nome="${esc(x.nome)}" onclick="selecionarPara(this)">${esc(x.label)}</div>`;
+    const sel = paraSelHas(x.id);
+    html += `<div class="combo-item${sel ? ' sel' : ''}" data-id="${esc(String(x.id))}" data-nome="${esc(x.nome)}" onclick="event.stopPropagation(); togglePara(this)"><span class="ck">${sel ? '✓' : ''}</span><span>${esc(x.label)}</span></div>`;
   });
   box.innerHTML = html;
 }
-function abrirPara() { const b = document.getElementById("iParaResults"); if (b) { b.style.display = "block"; renderPara(document.getElementById("iParaBusca").value); } }
-function filtrarPara() { abrirPara(); }
-function selecionarPara(el) {
-  document.getElementById("iPara").value = el.getAttribute("data-id");
-  document.getElementById("iParaBusca").value = el.getAttribute("data-nome");
-  document.getElementById("iParaResults").style.display = "none";
+function renderParaChips() {
+  const box = document.getElementById("iParaChips");
+  if (!box) return;
+  box.innerHTML = paraSel.map(x =>
+    `<span class="para-chip">${esc(x.nome)}<button type="button" title="Remover" onclick="removePara('${esc(String(x.id))}')">✕</button></span>`
+  ).join("");
+}
+// alterna a seleção; "eu mesmo" é exclusivo (demanda própria ≠ solicitação a colega)
+function togglePara(el) {
+  const id = el.getAttribute("data-id"), nome = el.getAttribute("data-nome");
+  const meId = String(currentUser && currentUser.id);
+  const isSelf = String(id) === meId;
+  if (paraSelHas(id)) {
+    paraSel = paraSel.filter(x => String(x.id) !== String(id));
+  } else if (isSelf) {
+    paraSel = [{ id, nome }];                                   // eu mesmo → seleção exclusiva
+  } else {
+    paraSel = paraSel.filter(x => String(x.id) !== meId);       // remove "eu mesmo" se estava marcado
+    paraSel.push({ id, nome });
+  }
+  renderParaChips();
+  renderPara(document.getElementById("iParaBusca").value);
   onParaChange();
 }
+function removePara(id) {
+  paraSel = paraSel.filter(x => String(x.id) !== String(id));
+  renderParaChips(); renderPara(document.getElementById("iParaBusca").value); onParaChange();
+}
+function abrirPara() { const b = document.getElementById("iParaResults"); if (b) { b.style.display = "block"; renderPara(document.getElementById("iParaBusca").value); } }
+function filtrarPara() { abrirPara(); }
 function openModal(id) {
   editingId = id || null;
   document.getElementById("modalTitle").textContent = id ? "Editar demanda" : "Nova demanda";
@@ -2060,9 +2103,11 @@ function openModal(id) {
     applyReadOnly(false);
     paraRow.style.display = "block";
     montarParaLista(currentUser && currentUser.id);
+    paraSel = [];
     document.getElementById("iPara").value = "";
     document.getElementById("iParaBusca").value = "";
     document.getElementById("iParaResults").style.display = "none";
+    renderParaChips();
     renderPara("");
     setupApprovalBox(null);
     onParaChange();
@@ -2109,25 +2154,27 @@ function applyReadOnly(ro) {
   if (banner) banner.style.display = ro ? "block" : "none";
 }
 function fillAutoBlock(paraId) {
-  const alvo = paraId ? PROFILES_BY_ID[paraId] : null;
-  document.getElementById("iAutoSetor").textContent = alvo ? (alvo.setor || "—") : "—";
+  const varios = paraId === '__varios__';
+  const alvo = (paraId && !varios) ? PROFILES_BY_ID[paraId] : null;
+  document.getElementById("iAutoSetor").textContent = varios ? "Vários" : (alvo ? (alvo.setor || "—") : "—");
   document.getElementById("iAutoSetorDem").textContent = (currentUser && currentUser.setor) || "—";
   document.getElementById("iAutoDemandante").textContent = (currentUser && currentUser.nome) || "—";
 }
 function onParaChange() {
   if (editingId) return;
-  const para = document.getElementById("iPara").value;
-  const has = !!para;
-  const isSelf = has && currentUser && String(para) === String(currentUser.id);
+  const n = paraSel.length;
+  const has = n > 0;
+  const meId = String(currentUser && currentUser.id);
+  const isSelfOnly = n === 1 && String(paraSel[0].id) === meId;
   document.getElementById("taskFormRest").classList.toggle("form-dim", !has);
   const btn = document.getElementById("saveBtn");
   btn.disabled = !has;
-  btn.textContent = (!has || isSelf) ? "Salvar" : "Enviar solicitação";
-  setOwnerOnly(isSelf);
-  // bloco de aprovação aparece sempre que há um destinatário (próprio ou colega)
+  btn.textContent = (!has || isSelfOnly) ? "Salvar" : (n > 1 ? `Enviar ${n} solicitações` : "Enviar solicitação");
+  setOwnerOnly(isSelfOnly);
+  // bloco de aprovação aparece sempre que há destinatário (próprio ou colega[s])
   document.getElementById("apprWrap").style.display = has ? "" : "none";
   setGestorOnly(isGestorPerfil(currentUser && currentUser.perfil));
-  fillAutoBlock(para);
+  fillAutoBlock(n === 1 ? paraSel[0].id : (n > 1 ? '__varios__' : null));
   const hint = document.getElementById("iParaHint");
   if (hint) hint.style.display = has ? "none" : "block";
 }
@@ -2418,47 +2465,60 @@ function removeNovaSubt(i) { novaSubt.splice(i, 1); renderSubtCreate(); }
 async function saveTask(e) {
   e.preventDefault();
 
-  // Nova demanda PARA OUTRA PESSOA = solicitação (ela aceita/recusa)
+  // Nova demanda PARA OUTRA(S) PESSOA(S) = solicitação, 1 por destinatário
   if (!editingId) {
-    const para = document.getElementById("iPara").value;
-    if (!para) { alert("Escolha para quem é a demanda."); return; }
-    if (currentUser && String(para) !== String(currentUser.id)) {
+    if (!paraSel.length) { alert("Escolha para quem é a demanda."); return; }
+    const meId = String(currentUser && currentUser.id);
+    const isSelfOnly = paraSel.length === 1 && String(paraSel[0].id) === meId;
+    if (!isSelfOnly) {
       if (!sb) { alert("Sem conexão com o servidor."); return; }
+      const titulo = document.getElementById("iTitulo").value.trim();
+      if (!titulo) { alert("Informe o título da demanda."); return; }
       const querAprov = document.getElementById("iAprovacao").checked && !document.getElementById("iAprovacao").disabled;
       const aprovadorSolic = document.getElementById("iAprovador").value;
       if (querAprov && !aprovadorSolic) { alert("Escolha o gestor que vai aprovar a demanda."); return; }
+      const descricao = document.getElementById("iDescricao").value.trim();
+      const prioridade = document.getElementById("iPrioridade").checked ? 'critica' : 'normal';
+      const prazo = document.getElementById("iPrazo").value || null;
+      const confidencial = (currentUser && currentUser.perfil !== 'individual') && document.getElementById("iConfidencial").checked;
+      const alvos = paraSel.filter(x => String(x.id) !== meId);   // "eu mesmo" nunca vira solicitação
       const btn = document.getElementById("saveBtn"); btn.disabled = true; btn.textContent = "Enviando...";
-      try {
-        const alvo = PROFILES_BY_ID[para] || {};
-        const ehGestor = isGestorPerfil(currentUser && currentUser.perfil);
-        const { error } = await sb.rpc("solicitar_demanda", {
-          p_para: para,
-          p_titulo: document.getElementById("iTitulo").value.trim(),
-          p_descricao: document.getElementById("iDescricao").value.trim(),
-          p_setor: alvo.setor || null,
-          p_prioridade: document.getElementById("iPrioridade").checked ? 'critica' : 'normal',
-          p_prazo: document.getElementById("iPrazo").value || null,
-          p_confidencial: (currentUser && currentUser.perfil !== 'individual') && document.getElementById("iConfidencial").checked,
-          p_aprovador: querAprov ? aprovadorSolic : null,
-          p_subtarefas: novaSubt.length ? novaSubt : null,
-        });
-        if (error) throw error;
-        if (querAprov) {
-          logAction({ titulo: document.getElementById("iTitulo").value.trim(), setor: alvo.setor || null, userId: para },
-                     "Aprovação solicitada", currentUser && currentUser.nome, nomeDe(aprovadorSolic));
-          showToast("Enviada para aprovação 🔔", nomeDe(aprovadorSolic) + " vai decidir; " + nomeDe(para) + " já vê como aguardando.");
-        } else {
-          logAction({ titulo: document.getElementById("iTitulo").value.trim(), setor: alvo.setor || null, userId: para },
-                     "Solicitação enviada", currentUser && currentUser.nome, nomeDe(para));
-          showToast("Solicitação enviada 📨", nomeDe(para) + " foi notificado(a).");
+      let ok = 0; const falhas = [];
+      for (const sel of alvos) {
+        const alvo = PROFILES_BY_ID[sel.id] || {};
+        try {
+          const { error } = await sb.rpc("solicitar_demanda", {
+            p_para: sel.id, p_titulo: titulo, p_descricao: descricao,
+            p_setor: alvo.setor || null, p_prioridade: prioridade, p_prazo: prazo,
+            p_confidencial: confidencial,
+            p_aprovador: querAprov ? aprovadorSolic : null,
+            p_subtarefas: novaSubt.length ? novaSubt : null,
+          });
+          if (error) throw error;
+          ok++;
+          logAction({ titulo, setor: alvo.setor || null, userId: sel.id },
+                    querAprov ? "Aprovação solicitada" : "Solicitação enviada",
+                    currentUser && currentUser.nome, querAprov ? nomeDe(aprovadorSolic) : sel.nome);
+        } catch (err) {
+          console.warn("Falha ao solicitar p/", sel.nome, err.message || err);
+          falhas.push(sel.nome);
         }
-        closeModal();
-        await loadSolicitacoes();
-        await loadFromSupabase();
-      } catch (err) {
-        alert("Falha ao solicitar: " + (err.message || err));
-        btn.disabled = false; btn.textContent = "Enviar solicitação";
       }
+      if (ok && !falhas.length) {
+        if (querAprov) showToast(`Enviada${ok > 1 ? 's' : ''} para aprovação 🔔`, `${ok} demanda${ok > 1 ? 's' : ''} · ${nomeDe(aprovadorSolic)} vai decidir.`);
+        else showToast(`Solicitaç${ok > 1 ? 'ões' : 'ão'} enviada${ok > 1 ? 's' : ''} 📨`, `${ok} colaborador${ok > 1 ? 'es' : ''} notificado${ok > 1 ? 's' : ''}.`);
+        closeModal();
+      } else if (ok && falhas.length) {
+        showToast("Envio parcial ⚠️", `${ok} enviada(s); falhou para: ${falhas.join(', ')}.`);
+        closeModal();
+      } else {
+        alert("Falha ao solicitar para: " + falhas.join(', '));
+        btn.disabled = false;
+        btn.textContent = alvos.length > 1 ? `Enviar ${alvos.length} solicitações` : "Enviar solicitação";
+        return;
+      }
+      await loadSolicitacoes();
+      await loadFromSupabase();
       return;
     }
   }
