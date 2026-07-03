@@ -570,6 +570,12 @@
   }
   .notif:last-child { border-bottom: none; }
   .notif.unread { background: var(--accent-soft); }
+  .notif.notif-click { cursor: pointer; }
+  .notif.notif-click:hover { background: var(--accent-soft); filter: brightness(1.06); }
+  /* flash ao chegar via clique numa notificação */
+  @keyframes flashAlvo { 0% { background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent) inset; } 100% { background: transparent; box-shadow: none; } }
+  .flash-alvo { animation: flashAlvo 2.4s ease-out; }
+  tr.flash-alvo > td { animation: flashAlvo 2.4s ease-out; }
   .notif .n-ico {
     width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center; font-size: 1rem;
@@ -1750,7 +1756,8 @@ function switchTab(id, btn) {
   activeTab = id;
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
   document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
-  if (btn) btn.classList.add("active");
+  const activeBtn = btn || document.querySelector(`.tab-btn[data-tab="${id}"]`);   // permite chamada programática (sino)
+  if (activeBtn) activeBtn.classList.add("active");
   document.getElementById("tab-" + id).classList.add("active");
   atualizarBadgeFiltros();
   if (id === "demandas") renderDataView();
@@ -3256,6 +3263,61 @@ function fmtNotifTime(iso) {
   const d = new Date(iso); const p = n => String(n).padStart(2, "0");
   return `${p(d.getDate())}/${p(d.getMonth() + 1)} · ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
+/* uma notificação tem destino navegável? */
+function notifTemDestino(n) {
+  if (!n) return false;
+  if (n.demanda_code || n.solicitacao_id) return true;
+  return ['solicitacao_recebida', 'solicitacao_aceita', 'solicitacao_recusada', 'aprovacao_solicitada'].includes(n.tipo);
+}
+/* marca UMA notificação como lida (otimista + servidor) */
+async function marcarNotifLida(n) {
+  if (!n || n.lida) return;
+  n.lida = true; renderBell();
+  if (sb) { try { await sb.from("notificacoes").update({ lida: true }).eq("id", n.id); } catch (e) {} }
+}
+/* rola até um elemento e dá um flash de destaque */
+function flashEl(el) {
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.remove('flash-alvo'); void el.offsetWidth; el.classList.add('flash-alvo');
+  setTimeout(() => el.classList.remove('flash-alvo'), 2600);
+}
+/* CLIQUE NA NOTIFICAÇÃO → vai até a causa */
+function abrirNotificacao(nid) {
+  const n = notifs.find(x => String(x.id) === String(nid));
+  if (!n) return;
+  document.getElementById("bellDropdown").classList.remove("open");
+  marcarNotifLida(n);
+  const code = n.demanda_code;
+
+  // 1) menção (@) → demanda, aba Comentários
+  if (n.tipo === 'mencao' && code) { abrirDemandaPorCode(code, 'comentarios'); return; }
+
+  // 2) pedido de aprovação → aba Aprovações, destacando o card
+  if (n.tipo === 'aprovacao_solicitada') {
+    switchTab('aprovacoes');
+    if (code) setTimeout(() => flashEl(document.querySelector(`#apprList .appr-card[data-code="${code}"]`)), 120);
+    return;
+  }
+
+  // 3) solicitações (recebida/aceita/recusada) → aba Solicitações, destacando a linha
+  if (n.solicitacao_id ||
+      ['solicitacao_recebida', 'solicitacao_aceita', 'solicitacao_recusada'].includes(n.tipo)) {
+    switchTab('solicitacoes');
+    if (n.solicitacao_id) setTimeout(() => flashEl(document.querySelector(`#tab-solicitacoes tr[data-solic="${n.solicitacao_id}"]`)), 120);
+    return;
+  }
+
+  // 4) demais tipos com demanda (enviada, aprovada, reprovada, status_demanda) → abre a demanda
+  if (code) { abrirDemandaPorCode(code); return; }
+}
+/* abre o modal da demanda pelo code; opcionalmente numa aba do modal */
+function abrirDemandaPorCode(code, aba) {
+  const t = tasks.find(x => x.code === code);
+  if (!t) { alert("Demanda não encontrada ou fora do seu acesso atual."); return; }
+  openModal(t.id);
+  if (aba) setModalTab(aba);
+}
 function renderBell() {
   const naoLidas = notifs.filter(n => !n.lida);
   const badge = document.getElementById("bellBadge");
@@ -3264,9 +3326,9 @@ function renderBell() {
   const list = document.getElementById("bellList");
   if (!naoLidas.length) { list.innerHTML = `<div class="bell-empty">Nenhuma notificação nova.</div>`; return; }
   const ico = { enviada: "📤", aprovacao_solicitada: "🔔", aprovada: "✅", reprovada: "⛔", info: "ℹ️", solicitacao_recebida: "📨", solicitacao_aceita: "✅", solicitacao_recusada: "⛔", mencao: "💬", status_demanda: "🔁" };
-  list.innerHTML = naoLidas.map(n => `<div class="notif unread n-${n.tipo}">
+  list.innerHTML = naoLidas.map(n => `<div class="notif unread n-${n.tipo}${notifTemDestino(n) ? ' notif-click' : ''}" onclick="abrirNotificacao(${n.id})">
     <div class="n-ico">${ico[n.tipo] || "•"}</div>
-    <div class="n-body"><div class="n-msg">${esc(n.mensagem)}</div><div class="n-time">${fmtNotifTime(n.created_at)}</div></div>
+    <div class="n-body"><div class="n-msg">${esc(n.mensagem)}</div><div class="n-time">${fmtNotifTime(n.created_at)}${notifTemDestino(n) ? ' · toque para abrir' : ''}</div></div>
   </div>`).join("");
 }
 function toggleBell(e) {
@@ -3298,7 +3360,7 @@ function renderApprovals() {
   if (!items.length) { list.innerHTML = `<div class="appr-empty">Nenhuma aprovação pendente. 🎉</div>`; return; }
   list.innerHTML = items.map(t => {
     const owner = ownerName(t.userId);
-    return `<div class="appr-card">
+    return `<div class="appr-card" data-code="${esc(t.code || '')}">
       <div class="ac-top">
         <h4>${t.code ? t.code + " · " : ""}${esc(t.titulo)}</h4>
         ${t.prioridade === "critica" ? '<span class="tag pri-critica">⚡ Prioridade</span>' : ''}
@@ -3430,7 +3492,7 @@ function solicTable(which, list, isRec) {
     } else {
       statusCell = solicStatusTag(s.status) + (s.status === 'recusada' && s.obs ? `<div class="s-sub">${esc(s.obs)}</div>` : '');
     }
-    return `<tr style="cursor:default"><td>${demanda}</td><td style="font-size:.8rem">${pessoa}</td><td style="white-space:nowrap;font-size:.78rem">${prazo}</td><td>${statusCell}</td></tr>`;
+    return `<tr data-solic="${s.id}" style="cursor:default"><td>${demanda}</td><td style="font-size:.8rem">${pessoa}</td><td style="white-space:nowrap;font-size:.78rem">${prazo}</td><td>${statusCell}</td></tr>`;
   }).join('');
   return `<div class="tbl-scroll"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
