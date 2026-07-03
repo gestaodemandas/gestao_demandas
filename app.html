@@ -132,6 +132,7 @@
     font-size: .6rem; min-width: 16px; height: 16px; border-radius: 99px; align-items: center;
     justify-content: center; padding: 0 4px; font-weight: 700; }
   .filtros-panel { position: absolute; top: calc(100% + 8px); right: 0; z-index: 70; width: 290px;
+    max-width: calc(100vw - 20px);
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-md);
     padding: 14px; display: none; flex-direction: column; gap: 3px; max-height: 78vh; overflow-y: auto; }
   .filtros-panel.open { display: flex; }
@@ -871,6 +872,19 @@
   .combo-item.sel .ck { background: var(--accent); border-color: var(--accent); }
   .combo-item.sel { color: var(--accent); font-weight: 600; }
   .combo-empty { padding: 12px 10px; font-size: .8rem; color: var(--text-mute); }
+  /* menções (@) nos comentários */
+  .coment-add { position: relative; }
+  .mention-list { position: absolute; bottom: calc(100% + 6px); left: 0; right: 0; z-index: 80;
+    max-height: 200px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; box-shadow: var(--shadow-md); padding: 4px; }
+  .mention-item { padding: 7px 10px; border-radius: 7px; font-size: .84rem; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+  .mention-item:hover, .mention-item.active { background: var(--accent-soft); color: var(--accent); }
+  .mention-item .m-setor { font-size: .68rem; color: var(--text-mute); margin-left: auto; }
+  .mention { color: var(--accent); font-weight: 700; }
+  /* registro dos envolvidos (multi-destinatário) dentro da demanda */
+  .env-box { background: var(--surface-2); border: 1px dashed var(--border); border-radius: 10px;
+    padding: 10px 12px; font-size: .78rem; color: var(--text-dim); line-height: 1.5; }
+  .env-box b { color: var(--text); }
   /* chips das pessoas selecionadas no "Para quem" */
   .para-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .para-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 999px;
@@ -1144,6 +1158,9 @@
             <div class="ab-item"><span class="ab-k">Setor do demandante</span><span class="ab-v" id="iAutoSetorDem">—</span></div>
             <div class="ab-item"><span class="ab-k">Demandante</span><span class="ab-v" id="iAutoDemandante">—</span></div>
           </div>
+          <div class="full env-box" id="envolvidosRow" style="display:none">
+            👥 <b>Envolvidos</b> — demanda criada em conjunto para: <span id="envolvidosNomes"></span>
+          </div>
           <div class="full">
             <label>Título da demanda</label>
             <input type="text" id="iTitulo" required placeholder="Ex.: Revisão da base de fornecedores">
@@ -1219,7 +1236,8 @@
       <div class="modal-tab" id="mtab-comentarios" style="display:none">
         <div id="comentBox" class="coment-box"></div>
         <div class="coment-add" id="comentAdd" style="display:none">
-          <input type="text" id="comentNovo" autocomplete="off" placeholder="Escreva um comentário..." onkeydown="if(event.key==='Enter'){event.preventDefault();enviarComentario()}">
+          <div class="mention-list" id="mentionList" style="display:none"></div>
+          <input type="text" id="comentNovo" autocomplete="off" placeholder="Escreva um comentário... (@ menciona um colega)" oninput="comentInput()" onkeydown="comentKeydown(event)">
           <button type="button" class="btn" onclick="enviarComentario()">Enviar</button>
         </div>
       </div>
@@ -1313,6 +1331,7 @@ let tasks = JSON.parse(localStorage.getItem("demandas") || "[]");
 let histLog = JSON.parse(localStorage.getItem("demandas_log") || "[]");
 let seqCounter = parseInt(localStorage.getItem("demandas_seq") || "0");
 let editingId = null;
+let ACESSOS_EXTRA = new Set();   // demandas que enxergo por MENÇÃO (@) — ids vindos de demanda_acessos
 let activeTab = "painel";
 let SUBT_BY_DEMANDA = {};   // demanda_id -> [subtarefas]
 let novaSubt = [];          // subtarefas em staging durante a CRIAÇÃO (títulos)
@@ -1405,6 +1424,7 @@ function taskToRow(t) {
     motivo_status: t.motivoStatus || null,
     criada_em: t.criadaEm || today(),
     concluida_em: t.concluidaEm || null,
+    envolvidos: t.envolvidos || null,
   };
 }
 function rowToTask(r) {
@@ -1423,6 +1443,7 @@ function rowToTask(r) {
     progresso: r.progresso || 0,
     pasta: r.pasta_arquivos || "",
     motivoStatus: r.motivo_status || "",
+    envolvidos: r.envolvidos || "",
     criadaEm: r.criada_em,
     concluidaEm: r.concluida_em || undefined,
     userId: r.user_id || null,
@@ -1445,6 +1466,14 @@ async function loadFromSupabase() {
     // um cache antigo repovoaria o banco com dados velhos/corrompidos
     // (ex.: setor errado), desfazendo correções. localStorage é só leitura/offline.
     tasks = data.map(rowToTask);
+
+    // acessos extras (menções @): demandas que enxergo por ter sido mencionado
+    if (currentUser && currentUser.id) {
+      try {
+        const { data: acc } = await sb.from("demanda_acessos").select("demanda_id").eq("user_id", currentUser.id);
+        ACESSOS_EXTRA = new Set((acc || []).map(a => String(a.demanda_id)));
+      } catch (e) { /* tabela pode ainda não existir (mencoes.sql pendente) */ }
+    }
 
     const { data: subs } = await sb.from("subtarefas").select("*");
     SUBT_BY_DEMANDA = {};
@@ -2070,6 +2099,8 @@ function abrirPara() { const b = document.getElementById("iParaResults"); if (b)
 function filtrarPara() { abrirPara(); }
 function openModal(id) {
   editingId = id || null;
+  mencoesPend = [];
+  const ml = document.getElementById("mentionList"); if (ml) ml.style.display = "none";
   document.getElementById("modalTitle").textContent = id ? "Editar demanda" : "Nova demanda";
   document.getElementById("btnDelete").style.display = id ? "inline-block" : "none";
   const f = document.getElementById("taskForm");
@@ -2095,6 +2126,9 @@ function openModal(id) {
     const setorDono = (t.userId && PROFILES_BY_ID[t.userId] && PROFILES_BY_ID[t.userId].setor) || null;
     document.getElementById("iAutoSetorDem").textContent = t.setorDemandante || setorDono || "—";
     document.getElementById("iAutoDemandante").textContent = t.solicitante || "—";
+    // registro dos envolvidos (demanda criada em lote via multi-seleção)
+    document.getElementById("envolvidosRow").style.display = t.envolvidos ? "" : "none";
+    document.getElementById("envolvidosNomes").textContent = t.envolvidos || "";
     setupApprovalBox(t);
     // travas por campo: exec (dono/gestor) edita título/descrição/status/pasta;
     // prazo/prioridade/confidencial só solicitante + gestor direto do executante
@@ -2103,6 +2137,7 @@ function openModal(id) {
     applyReadOnly(false);
     paraRow.style.display = "block";
     montarParaLista(currentUser && currentUser.id);
+    document.getElementById("envolvidosRow").style.display = "none";
     paraSel = [];
     document.getElementById("iPara").value = "";
     document.getElementById("iParaBusca").value = "";
@@ -2242,6 +2277,65 @@ function setModalTab(name) {
   if (name === "historico") renderHistStatus(t);
   if (name === "comentarios") renderComentarios(t);
 }
+/* ── Menções (@) nos comentários ── */
+let mencoesPend = [];        // pessoas escolhidas no autocomplete deste comentário: [{id, nome}]
+let MENTION_NAMES = null;    // cache dos nomes p/ destacar @Nome no texto
+function comentInput() {
+  const inp = document.getElementById("comentNovo");
+  const list = document.getElementById("mentionList");
+  if (!inp || !list) return;
+  const caret = inp.selectionStart == null ? inp.value.length : inp.selectionStart;
+  const upto = inp.value.slice(0, caret);
+  const m = upto.match(/@([\p{L}\d ]{0,30})$/u);          // "@" + termo (aceita espaço p/ nome composto)
+  if (!m) { list.style.display = "none"; return; }
+  const term = m[1].trim().toLowerCase();
+  const meId = String(currentUser && currentUser.id);
+  const opts = Object.values(PROFILES_BY_ID)
+    .filter(p => p.matricula !== '0' && String(p.id) !== meId)
+    .filter(p => !term || (p.nome || '').toLowerCase().includes(term))
+    .sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'))
+    .slice(0, 6);
+  if (!opts.length) { list.style.display = "none"; return; }
+  list.innerHTML = opts.map((p, i) =>
+    `<div class="mention-item${i === 0 ? ' active' : ''}" data-id="${esc(String(p.id))}" data-nome="${esc(p.nome)}" onclick="event.stopPropagation(); pickMention(this)">@${esc(p.nome)}<span class="m-setor">${esc(p.setor || '')}</span></div>`).join("");
+  list.style.display = "block";
+}
+function pickMention(el) {
+  const id = el.getAttribute("data-id"), nome = el.getAttribute("data-nome");
+  const inp = document.getElementById("comentNovo");
+  const list = document.getElementById("mentionList");
+  const caret = inp.selectionStart == null ? inp.value.length : inp.selectionStart;
+  const novo = inp.value.slice(0, caret).replace(/@([\p{L}\d ]{0,30})$/u, '@' + nome + ' ');
+  inp.value = novo + inp.value.slice(caret);
+  if (!mencoesPend.some(x => String(x.id) === String(id))) mencoesPend.push({ id, nome });
+  list.style.display = "none";
+  inp.focus();
+  try { inp.setSelectionRange(novo.length, novo.length); } catch (e) {}
+}
+function comentKeydown(e) {
+  const list = document.getElementById("mentionList");
+  const aberto = list && list.style.display !== "none";
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (aberto) {
+      const alvo = list.querySelector(".mention-item.active") || list.querySelector(".mention-item");
+      if (alvo) pickMention(alvo);
+    } else enviarComentario();
+  } else if (e.key === "Escape" && aberto) {
+    e.stopPropagation(); list.style.display = "none";
+  }
+}
+/* destaca @Nome nos comentários exibidos */
+function fmtComentTexto(s) {
+  let out = esc(s);
+  if (!MENTION_NAMES || !MENTION_NAMES.length)
+    MENTION_NAMES = Object.values(PROFILES_BY_ID).map(p => p.nome).filter(Boolean).sort((a, b) => b.length - a.length);
+  MENTION_NAMES.forEach(n => {
+    if (out.includes('@' + n)) out = out.split('@' + n).join('<span class="mention">@' + esc(n) + '</span>');
+  });
+  return out;
+}
+
 async function renderComentarios(t) {
   const box = document.getElementById("comentBox");
   const add = document.getElementById("comentAdd");
@@ -2267,7 +2361,7 @@ async function renderComentarios(t) {
     const d = new Date(c.created_at); const p = n => String(n).padStart(2, "0");
     const ts = isNaN(d.getTime()) ? "" : `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`;
     return `<div class="cmt ${eu ? 'cmt-eu' : ''}">
-      <div class="cmt-bubble"><div class="cmt-head">${esc(nomeDe(c.user_id))} · ${ts}</div><div class="cmt-txt">${esc(c.texto)}</div></div>
+      <div class="cmt-bubble"><div class="cmt-head">${esc(nomeDe(c.user_id))} · ${ts}</div><div class="cmt-txt">${fmtComentTexto(c.texto)}</div></div>
     </div>`;
   }).join("");
   box.scrollTop = box.scrollHeight;
@@ -2282,6 +2376,14 @@ async function enviarComentario() {
     const { error } = await sb.from("comentarios").insert([{ demanda_id: editingId, user_id: currentUser && currentUser.id, texto }]);
     if (error) throw error;
     inp.value = "";
+    // menções (@): notifica e concede acesso de leitura a quem foi citado
+    const cit = mencoesPend.filter(m => texto.includes('@' + m.nome));
+    const ids = Array.from(new Set(cit.map(m => String(m.id)))).filter(id => id !== String(currentUser && currentUser.id));
+    if (ids.length) {
+      try { await sb.rpc("mencionar_usuarios", { p_demanda: editingId, p_users: ids }); }
+      catch (err) { console.warn("Falha ao registrar menção:", err.message || err); }
+    }
+    mencoesPend = [];
     await renderComentarios(tasks.find(x => String(x.id) === String(editingId)));
   } catch (e) { alert("Falha ao comentar: " + (e.message || e)); }
 }
@@ -2482,6 +2584,8 @@ async function saveTask(e) {
       const prazo = document.getElementById("iPrazo").value || null;
       const confidencial = (currentUser && currentUser.perfil !== 'individual') && document.getElementById("iConfidencial").checked;
       const alvos = paraSel.filter(x => String(x.id) !== meId);   // "eu mesmo" nunca vira solicitação
+      // multi-destinatário: registra em cada cópia quem são os envolvidos do lote
+      const envolvidos = alvos.length > 1 ? alvos.map(x => x.nome).join(', ') : null;
       const btn = document.getElementById("saveBtn"); btn.disabled = true; btn.textContent = "Enviando...";
       let ok = 0; const falhas = [];
       for (const sel of alvos) {
@@ -2493,6 +2597,7 @@ async function saveTask(e) {
             p_confidencial: confidencial,
             p_aprovador: querAprov ? aprovadorSolic : null,
             p_subtarefas: novaSubt.length ? novaSubt : null,
+            p_envolvidos: envolvidos,
           });
           if (error) throw error;
           ok++;
@@ -2612,9 +2717,11 @@ async function saveTask(e) {
 function deleteTask() {
   if (!editingId) return;
   const t = tasks.find(x => String(x.id) === String(editingId));
-  // Usuário comum só exclui o que criou (gestores/master/dev podem excluir dos liderados)
-  if (currentUser && currentUser.perfil === 'usuario' && t.userId && String(t.userId) !== String(currentUser.id)) {
-    alert("Você só pode excluir demandas criadas por você.");
+  if (!t) return;
+  // Excluir = solicitante (mesmo que tenha criado p/ outra pessoa) + gestor direto + admin/master.
+  // Espelha o botão (applyPermissoes → podeEditarCampos3) e o RLS (excluir_solicitante / can_manage).
+  if (!podeEditarCampos3(t)) {
+    alert("Você não tem permissão para excluir esta demanda (só o solicitante, o gestor direto do executante ou um administrador).");
     return;
   }
   if (!confirm(`Excluir a demanda "${t.titulo}"?`)) return;
@@ -2663,15 +2770,16 @@ function scopeApply(list) {
     return list.filter(t => ids.has(String(t.id)));
   }
   if (taskScope === 'minhas') {
-    return list.filter(t => String(t.userId) === me);
+    // + demandas em que fui mencionado (@) — acesso concedido pela menção
+    return list.filter(t => String(t.userId) === me || ACESSOS_EXTRA.has(String(t.id)));
   }
   // 'equipe' (setor): master/dev veem tudo; demais veem o próprio setor +
   // (gestor) os liderados diretos de QUALQUER setor/filial — espelha o RLS (is_meu_liderado),
-  // p/ o gestor enxergar seu time de loja (setor diferente do dele).
+  // p/ o gestor enxergar seu time de loja (setor diferente do dele) + menções (@).
   if (vemTudo(currentUser.perfil)) return list;
   const s = currentUser.setor;
   const lid = lideradosIds();
-  return list.filter(t => (s && (t.setor === s || setorDoDono(t) === s)) || lid.has(String(t.userId)));
+  return list.filter(t => (s && (t.setor === s || setorDoDono(t) === s)) || lid.has(String(t.userId)) || ACESSOS_EXTRA.has(String(t.id)));
 }
 function setScope(s) { taskScope = s; render(); }
 /* todos (inclusive individual) têm ao menos Minhas + Solicitadas */
@@ -2761,7 +2869,12 @@ function filtrarChecklist(boxId, term) {
 function toggleFiltros(e) {
   if (e) e.stopPropagation();
   const panel = document.getElementById('filtrosPanel');
-  if (panel.classList.toggle('open')) renderFiltrosPanel();
+  if (panel.classList.toggle('open')) {
+    renderFiltrosPanel();
+    // altura máx = do topo do painel até o rodapé da janela (evita cortar em telas < 1080p / zoom do Windows)
+    const r = panel.getBoundingClientRect();
+    panel.style.maxHeight = Math.max(200, window.innerHeight - r.top - 14) + "px";
+  }
 }
 function onFilter(field, val) {
   FILT[field] = val;
@@ -3150,7 +3263,7 @@ function renderBell() {
   badge.textContent = naoLidas.length > 9 ? "9+" : naoLidas.length;
   const list = document.getElementById("bellList");
   if (!naoLidas.length) { list.innerHTML = `<div class="bell-empty">Nenhuma notificação nova.</div>`; return; }
-  const ico = { enviada: "📤", aprovacao_solicitada: "🔔", aprovada: "✅", reprovada: "⛔", info: "ℹ️", solicitacao_recebida: "📨", solicitacao_aceita: "✅", solicitacao_recusada: "⛔" };
+  const ico = { enviada: "📤", aprovacao_solicitada: "🔔", aprovada: "✅", reprovada: "⛔", info: "ℹ️", solicitacao_recebida: "📨", solicitacao_aceita: "✅", solicitacao_recusada: "⛔", mencao: "💬", status_demanda: "🔁" };
   list.innerHTML = naoLidas.map(n => `<div class="notif unread n-${n.tipo}">
     <div class="n-ico">${ico[n.tipo] || "•"}</div>
     <div class="n-body"><div class="n-msg">${esc(n.mensagem)}</div><div class="n-time">${fmtNotifTime(n.created_at)}</div></div>
