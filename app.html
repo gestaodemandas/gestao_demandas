@@ -264,6 +264,26 @@
   }
   .col-head .col-title { display: flex; align-items: center; gap: 7px; }
   .col-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-mute); }
+  /* ajuda de status (?) com tooltip no cabeçalho da coluna */
+  .status-help {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 15px; height: 15px; border-radius: 50%; flex: none;
+    border: 1px solid var(--text-mute); color: var(--text-mute);
+    font-size: .62rem; font-weight: 700; cursor: help; position: relative;
+  }
+  .status-help:hover { border-color: var(--accent); color: var(--accent); }
+  .status-help .sh-tip {
+    position: absolute; top: calc(100% + 8px); left: 50%;
+    transform: translateX(-50%) translateY(-4px);
+    width: 210px; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px;
+    font-size: .72rem; font-weight: 400; line-height: 1.4; color: var(--text);
+    text-transform: none; letter-spacing: 0;
+    box-shadow: var(--shadow-md); z-index: 50;
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity .15s ease, transform .15s ease;
+  }
+  .status-help:hover .sh-tip { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
   .col-head h2 { font-size: .78rem; text-transform: uppercase; letter-spacing: .9px; color: var(--text-dim); font-weight: 700; }
   .col-head .count {
     background: var(--surface-2); border-radius: 99px; padding: 2px 10px;
@@ -1194,6 +1214,17 @@
           <div class="full env-box" id="envolvidosRow" style="display:none">
             👥 <b>Envolvidos</b> — demanda criada em conjunto para: <span id="envolvidosNomes"></span>
           </div>
+          <div class="full env-box" id="repactRow" style="display:none"></div>
+          <div class="full" id="repactForm" style="display:none">
+            <label>Repactuar prazo — novo prazo</label>
+            <input type="date" id="repactNovoPrazo">
+            <label style="margin-top:10px">Justificativa <span style="color:var(--text-mute);font-size:.65rem;text-transform:none;letter-spacing:0">(obrigatória)</span></label>
+            <textarea id="repactJustif" placeholder="Por que o prazo precisa mudar?"></textarea>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button type="button" class="btn" onclick="enviarRepactuacao()">Enviar pedido ao solicitante</button>
+              <button type="button" class="btn btn-ghost" onclick="toggleRepactForm(false)">Cancelar</button>
+            </div>
+          </div>
           <div class="full">
             <label>Título da demanda</label>
             <input type="text" id="iTitulo" required placeholder="Ex.: Revisão da base de fornecedores">
@@ -1276,6 +1307,7 @@
       </div>
       <div class="modal-actions">
         <button type="button" class="btn btn-danger" id="btnDelete" style="display:none" onclick="deleteTask()">Excluir</button>
+        <button type="button" class="btn btn-ghost" id="repactBtn" style="display:none" onclick="toggleRepactForm(true)">🕐 Repactuar prazo</button>
         <div class="right">
           <button type="button" class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
           <button type="submit" class="btn" id="saveBtn">Salvar</button>
@@ -1355,6 +1387,14 @@ const STATUS = [
   { id: "concluido",  label: "Concluído" },
 ];
 const STATUS_LABEL = { backlog: "Backlog", andamento: "Em andamento", aguardando: "Aguardando", pausado: "Pausado", concluido: "Concluído" };
+/* premissa de cada status (tooltip do "?" no cabeçalho da coluna do Quadro) */
+const STATUS_HINT = {
+  backlog:    "A fazer: demanda aceita, mas ainda não iniciada — na fila aguardando começar.",
+  andamento:  "Em execução ativa agora, sendo trabalhada pelo responsável.",
+  aguardando: "Parada aguardando ação/resposta de terceiros (outra área, fornecedor, sistema) — fora do controle do responsável.",
+  pausado:    "Interrompida por decisão interna (repriorização, falta de recurso); será retomada depois.",
+  concluido:  "Finalizada e entregue (100%).",
+};
 const TIPO_LABEL = { principal: "Principal", paralela: "Paralela", oportunidade: "Oportunidade" };
 const PRI_LABEL = { baixa: "Baixa", media: "Média", alta: "Alta", critica: "Crítica" };
 const RELEVANCIA_LABEL = { normal: "Normal", alta: "Alta", critica: "Crítica" };
@@ -1367,6 +1407,7 @@ let editingId = null;
 let ACESSOS_EXTRA = new Set();   // demandas que enxergo por MENÇÃO (@) — ids vindos de demanda_acessos
 let activeTab = "painel";
 let SUBT_BY_DEMANDA = {};   // demanda_id -> [subtarefas]
+let REPACT_BY_DEMANDA = {}; // demanda_id -> repactuação PENDENTE (se houver)
 let novaSubt = [];          // subtarefas em staging durante a CRIAÇÃO (títulos)
 
 function persist() {
@@ -1514,6 +1555,13 @@ async function loadFromSupabase() {
       const k = String(st.demanda_id);
       (SUBT_BY_DEMANDA[k] = SUBT_BY_DEMANDA[k] || []).push(st);
     });
+
+    // repactuações de prazo PENDENTES (p/ faixa de aprovação no drawer)
+    REPACT_BY_DEMANDA = {};
+    try {
+      const { data: reps } = await sb.from("repactuacoes").select("*").eq("status", "pendente");
+      (reps || []).forEach(r => { REPACT_BY_DEMANDA[String(r.demanda_id)] = r; });
+    } catch (e) { /* tabela pode ainda não existir (repactuacao.sql pendente) */ }
 
     const { data: logs } = await sb.from("demandas_log")
       .select("*").order("created_at", { ascending: false }).limit(500);
@@ -1976,7 +2024,7 @@ function renderBoard() {
 
     return `<div class="col" data-status="${col.id}">
       <div class="col-head">
-        <div class="col-title"><span class="col-dot"></span><h2>${col.label}</h2></div>
+        <div class="col-title"><span class="col-dot"></span><h2>${col.label}</h2><span class="status-help" tabindex="0">?<span class="sh-tip">${esc(STATUS_HINT[col.id] || "")}</span></span></div>
         <span class="count">${items.length}</span>
       </div>
       <div class="col-body">${cards}</div>
@@ -2163,6 +2211,7 @@ function openModal(id) {
     // registro dos envolvidos (demanda criada em lote via multi-seleção)
     document.getElementById("envolvidosRow").style.display = t.envolvidos ? "" : "none";
     document.getElementById("envolvidosNomes").textContent = t.envolvidos || "";
+    renderRepactBanner(t);   // faixa de repactuação de prazo + botão "Repactuar"
     setupApprovalBox(t);
     // travas por campo: exec (dono/gestor) edita título/descrição/status/pasta;
     // prazo/prioridade/confidencial só solicitante + gestor direto do executante
@@ -2172,6 +2221,9 @@ function openModal(id) {
     paraRow.style.display = "block";
     montarParaLista(currentUser && currentUser.id);
     document.getElementById("envolvidosRow").style.display = "none";
+    document.getElementById("repactRow").style.display = "none";
+    document.getElementById("repactForm").style.display = "none";
+    document.getElementById("repactBtn").style.display = "none";
     paraSel = [];
     document.getElementById("iPara").value = "";
     document.getElementById("iParaBusca").value = "";
@@ -2301,6 +2353,87 @@ function setupApprovalBox(t) {
 function closeModal() {
   document.getElementById("overlay").classList.remove("open");
   editingId = null;
+}
+
+/* ══════════ REPACTUAÇÃO DE PRAZO ══════════ */
+/* id do solicitante EXTERNO da demanda (quem pediu, diferente do dono) — ou null */
+function solicitanteDemandaId(t) {
+  if (!t) return null;
+  const s = solicitacoes.find(x => String(x.demanda_id) === String(t.id)
+    && x.de_user_id && String(x.de_user_id) !== String(t.userId));
+  return s ? s.de_user_id : null;
+}
+/* pode PEDIR repactuação: demanda aberta, com solicitante externo, sem pendente, e sou dono/gestor direto/admin */
+function podePedirRepact(t) {
+  if (!t || !t.id || t.status === 'concluido') return false;
+  if (!solicitanteDemandaId(t)) return false;                 // demanda própria → edita prazo direto
+  if (REPACT_BY_DEMANDA[String(t.id)]) return false;          // já há repactuação pendente
+  const me = String(currentUser && currentUser.id);
+  const admin = currentUser && (currentUser.perfil === 'desenvolvedor' || currentUser.perfil === 'gestor_master');
+  return admin || String(t.userId) === me || lideradosIds().has(String(t.userId));
+}
+/* faixa de repactuação pendente no drawer (aprovar/recusar p/ o solicitante; info p/ os demais) */
+function renderRepactBanner(t) {
+  const row = document.getElementById("repactRow");
+  const btn = document.getElementById("repactBtn");
+  document.getElementById("repactForm").style.display = "none";
+  if (!row) return;
+  const rep = t && REPACT_BY_DEMANDA[String(t.id)];
+  if (rep) {
+    const meId = String(currentUser && currentUser.id);
+    const dt = d => d ? fmtDate(d) : '—';
+    const cabeca = `🕐 <b>Repactuação de prazo pendente</b><br>${esc(nomeDe(rep.pedido_por))} propôs: ${dt(rep.prazo_atual)} → <b>${dt(rep.prazo_novo)}</b>.<br>Motivo: ${esc(rep.justificativa)}`;
+    if (String(rep.solicitante_id) === meId) {
+      row.innerHTML = cabeca + `<div style="display:flex;gap:8px;margin-top:10px">
+        <button type="button" class="btn" onclick="decidirRepact(${rep.id}, true)">✓ Aprovar</button>
+        <button type="button" class="btn btn-ghost" onclick="decidirRepact(${rep.id}, false)">✗ Recusar</button></div>`;
+    } else {
+      row.innerHTML = cabeca + `<div style="margin-top:8px;font-size:.72rem;color:var(--text-mute)">Aguardando decisão de ${esc(nomeDe(rep.solicitante_id))}.</div>`;
+    }
+    row.style.display = "";
+  } else {
+    row.style.display = "none";
+  }
+  if (btn) btn.style.display = podePedirRepact(t) ? "inline-block" : "none";
+}
+function toggleRepactForm(show) {
+  const t = tasks.find(x => String(x.id) === String(editingId));
+  document.getElementById("repactForm").style.display = show ? "" : "none";
+  document.getElementById("repactBtn").style.display = (show || !podePedirRepact(t)) ? "none" : "inline-block";
+  if (show) {
+    document.getElementById("repactNovoPrazo").value = (t && t.prazo) || "";
+    document.getElementById("repactJustif").value = "";
+    setModalTab("criacao");
+    document.getElementById("repactNovoPrazo").focus();
+  }
+}
+async function enviarRepactuacao() {
+  if (!editingId) return;
+  if (!sb) { alert("Sem conexão com o servidor."); return; }
+  const prazo = document.getElementById("repactNovoPrazo").value;
+  const just = document.getElementById("repactJustif").value.trim();
+  if (!prazo) { alert("Escolha o novo prazo."); return; }
+  if (!just) { alert("A justificativa é obrigatória."); return; }
+  try {
+    const { error } = await sb.rpc("pedir_repactuacao", { p_demanda: editingId, p_prazo_novo: prazo, p_justificativa: just });
+    if (error) throw error;
+    showToast("Repactuação enviada 🕐", "O solicitante vai aprovar ou recusar o novo prazo.");
+    closeModal();
+    await loadFromSupabase();
+  } catch (e) { alert("Falha ao pedir repactuação: " + (e.message || e)); }
+}
+async function decidirRepact(id, aprovar) {
+  if (!sb) { alert("Sem conexão com o servidor."); return; }
+  let obs = null;
+  if (!aprovar) { obs = prompt("Motivo da recusa (opcional):"); if (obs === null) return; }
+  else if (!confirm("Aprovar a repactuação? O prazo da demanda será atualizado para a nova data.")) return;
+  try {
+    const { error } = await sb.rpc("decidir_repactuacao", { p_id: id, p_aprovar: aprovar, p_obs: obs });
+    if (error) throw error;
+    showToast(aprovar ? "Prazo repactuado ✓" : "Repactuação recusada", aprovar ? "A demanda foi atualizada." : "O prazo foi mantido.");
+    closeModal();
+    await loadFromSupabase();
+  } catch (e) { alert("Falha ao decidir: " + (e.message || e)); }
 }
 function setModalTab(name) {
   document.querySelectorAll(".modal-tabs .mtab").forEach(b => b.classList.toggle("active", b.dataset.mtab === name));
@@ -2934,15 +3067,32 @@ function within7(t) {
 function myTasks() { const id = currentUser && currentUser.id; return tasks.filter(t => String(t.userId) === String(id)); }
 function painelStats(list) {
   const aberta = t => t.status !== 'concluido' && !aguardandoAprov(t);
+  const concl = list.filter(t => t.status === 'concluido');
+  // Concluídas no prazo (%): das concluídas com prazo+data de conclusão, quantas entregues até o prazo
+  const conclComPrazo = concl.filter(t => t.prazo && t.concluidaEm);
+  const noPrazo = conclComPrazo.filter(t => t.concluidaEm <= t.prazo).length;
+  // Tempo médio de conclusão (dias): média de (concluida_em − criada_em)
+  const conclComDatas = concl.filter(t => t.criadaEm && t.concluidaEm);
+  let tempoMedio = null;
+  if (conclComDatas.length) {
+    const soma = conclComDatas.reduce((a, t) => {
+      const dias = (new Date(t.concluidaEm) - new Date(t.criadaEm)) / 86400000;
+      return a + (isFinite(dias) && dias >= 0 ? dias : 0);
+    }, 0);
+    tempoMedio = Math.round(soma / conclComDatas.length);
+  }
   return {
     andamento: list.filter(t => t.status === 'andamento' && !aguardandoAprov(t)).length,
     aVencer: list.filter(within7).length,
     atrasada: list.filter(t => aberta(t) && t.prazo && t.prazo < today()).length,
     aguardando: list.filter(aguardandoAprov).length,
     backlog: list.filter(t => t.status === 'backlog').length,                // ainda não iniciadas
-    concluidas: list.filter(t => t.status === 'concluido').length,
+    concluidas: concl.length,
     // pendentes = iniciadas e não concluídas (exclui backlog e aguardando aprovação)
     pendentes: list.filter(t => aberta(t) && t.status !== 'backlog').length,
+    pctNoPrazo: conclComPrazo.length ? Math.round(noPrazo / conclComPrazo.length * 100) : null,
+    noPrazoBase: conclComPrazo.length,
+    tempoMedio, tempoBase: conclComDatas.length,
   };
 }
 function onFireSet() {
@@ -3099,6 +3249,9 @@ function renderPainel() {
     ${pCard('#C51230', 'var(--st-late)', ps.atrasada, 'Atrasada' + (ps.atrasada === 1 ? '' : 's'), 'requer atenção', '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>')}
     ${pCard('#9e9e9e', 'var(--st-wait)', ps.backlog, 'Backlog', 'ainda não iniciadas', '<path d="M3 6h18M3 12h18M3 18h18"/>')}
     ${pCard('#7C9063', 'var(--st-done)', ps.concluidas, 'Concluída' + (ps.concluidas === 1 ? '' : 's'), 'finalizadas', '<path d="M20 6 9 17l-5-5"/>')}
+    ${pCard('#7C9063', 'var(--st-done)', ps.noPrazoBase ? ps.pctNoPrazo + '%' : '—', 'No prazo', ps.noPrazoBase ? `de ${ps.noPrazoBase} concluída${ps.noPrazoBase === 1 ? '' : 's'}` : 'sem base ainda', '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/>')}
+    ${pCard('#C9A839', '#C9A839', ps.aguardando, 'Aguardando aprovação', ps.aguardando ? 'com o gestor' : 'nada pendente', '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>')}
+    ${pCard('#4A7FA8', '#4A7FA8', ps.tempoBase ? ps.tempoMedio + 'd' : '—', 'Tempo médio', ps.tempoBase ? 'até concluir' : 'sem base ainda', '<path d="M12 2v4M12 2a10 10 0 1 0 10 10"/><path d="M12 12l4 2"/>')}
   </div>`;
 
   const foco = focoList(mine);
@@ -3347,7 +3500,7 @@ function abrirDemandaPorCode(code, aba) {
   openModal(t.id);
   if (aba) setModalTab(aba);
 }
-const NOTIF_ICO = { enviada: "📤", aprovacao_solicitada: "🔔", aprovada: "✅", reprovada: "⛔", info: "ℹ️", solicitacao_recebida: "📨", solicitacao_aceita: "✅", solicitacao_recusada: "⛔", mencao: "💬", status_demanda: "🔁" };
+const NOTIF_ICO = { enviada: "📤", aprovacao_solicitada: "🔔", aprovada: "✅", reprovada: "⛔", info: "ℹ️", solicitacao_recebida: "📨", solicitacao_aceita: "✅", solicitacao_recusada: "⛔", mencao: "💬", status_demanda: "🔁", repactuacao: "🕐" };
 function notifRow(n) {
   return `<div class="notif unread n-${n.tipo}${notifTemDestino(n) ? ' notif-click' : ''}" onclick="abrirNotificacao(${n.id})">
     <div class="n-ico">${NOTIF_ICO[n.tipo] || "•"}</div>
