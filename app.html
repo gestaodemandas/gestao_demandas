@@ -314,6 +314,14 @@
     box-shadow: 0 2px 9px rgba(217,131,36,.45);
   }
   .task .t-id { font-size: .63rem; color: var(--text-mute); font-weight: 700; letter-spacing: .6px; margin-bottom: 6px; font-family: monospace; }
+  /* demanda que faz parte de um PROJETO: card destacado (faixa + borda azul) */
+  .task.has-proj { border-color: var(--blue); box-shadow: inset 3px 0 0 var(--blue), var(--shadow-sm); }
+  .task.has-proj:hover { border-color: var(--blue); }
+  .task .t-proj { display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+    background: var(--blue-soft); border-radius: 7px; padding: 5px 8px; margin: 0 0 9px; }
+  .task .t-proj-nome { font-size: .68rem; font-weight: 800; color: var(--blue); letter-spacing: .2px; }
+  .task .t-proj-tag { font-size: .58rem; font-weight: 700; color: var(--blue);
+    background: rgba(74,127,168,.2); padding: 1px 7px; border-radius: 99px; }
   .task .t-top { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 8px; }
   .tag { font-size: .64rem; padding: 3px 9px; border-radius: 99px; font-weight: 700; letter-spacing: .2px; display: inline-flex; align-items: center; gap: 4px; }
   .tag.tipo-principal { background: var(--accent-soft); color: var(--accent-bright); }
@@ -457,20 +465,21 @@
   .btn-danger { background: transparent; border: 1px solid rgba(239,68,68,.4); color: var(--red); }
   .btn-danger:hover { background: rgba(239,68,68,.1); filter: none; }
 
-  /* ===== Demanda como DRAWER lateral (só o #overlay; settings/senha seguem popup central) ===== */
-  #overlay {
+  /* ===== Demanda/Projeto como DRAWER lateral (#overlay + #projOverlay + #projDetailOverlay;
+     settings/senha seguem popup central) ===== */
+  #overlay, #projOverlay, #projDetailOverlay {
     display: block; padding: 0; align-items: initial; justify-content: initial;
     opacity: 0; visibility: hidden; transition: opacity .25s ease, visibility .25s ease;
   }
-  #overlay.open { display: block; opacity: 1; visibility: visible; }
-  #overlay .modal {
+  #overlay.open, #projOverlay.open, #projDetailOverlay.open { display: block; opacity: 1; visibility: visible; }
+  #overlay .modal, #projOverlay .modal, #projDetailOverlay .modal {
     position: fixed; top: 0; right: 0; height: 100vh; height: 100dvh;
     width: 480px; max-width: 100%; max-height: none;
     border: none; border-left: 1px solid var(--border); border-radius: 0;
     box-shadow: -8px 0 32px rgba(0,0,0,.28);
     transform: translateX(100%); transition: transform .3s cubic-bezier(.22,1,.36,1);
   }
-  #overlay.open .modal { transform: translateX(0); }
+  #overlay.open .modal, #projOverlay.open .modal, #projDetailOverlay.open .modal { transform: translateX(0); }
 
   /* progresso no modal */
   .prog-input-wrap { display: flex; align-items: center; gap: 12px; }
@@ -575,9 +584,13 @@
     transition: background .15s;
   }
   .notif:last-child { border-bottom: none; }
-  .notif.unread { background: var(--accent-soft); }
+  .notif.unread { background: var(--accent-soft); }   /* não lida = vermelho claro */
+  .notif.lida { background: var(--surface-2); }         /* lida (histórico) = cinza */
   .notif.notif-click { cursor: pointer; }
-  .notif.notif-click:hover { background: var(--accent-soft); filter: brightness(1.06); }
+  .notif.notif-click:hover { filter: brightness(1.06); }
+  .notif-del { border: none; background: none; color: var(--text-mute); cursor: pointer; font-size: .85rem;
+    padding: 2px 6px; flex: none; align-self: center; border-radius: 6px; line-height: 1; }
+  .notif-del:hover { color: var(--red-bright); background: var(--surface-3); }
   /* flash ao chegar via clique numa notificação */
   @keyframes flashAlvo { 0% { background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent) inset; } 100% { background: transparent; box-shadow: none; } }
   .flash-alvo { animation: flashAlvo 2.4s ease-out; }
@@ -741,6 +754,60 @@
   .cat-count { background: var(--surface-3); color: var(--text-dim); font-size: .68rem; font-weight: 700;
     padding: 1px 8px; border-radius: 99px; letter-spacing: 0; text-transform: none; }
   .cat-list-body { max-height: 280px; overflow-y: auto; }
+
+  /* ===== Projetos ===== */
+  .proj-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; margin-top: 14px; }
+  .proj-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px;
+    cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; box-shadow: var(--shadow-sm); }
+  .proj-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .proj-card .pc-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px; }
+  .proj-card .pc-code { font-size: .63rem; color: var(--text-mute); font-weight: 700; letter-spacing: .5px; }
+  .proj-card h4 { font-size: .95rem; font-weight: 700; margin: 2px 0 8px; }
+  .proj-card .pc-desc { font-size: .78rem; color: var(--text-dim); margin-bottom: 10px; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .proj-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .proj-tag { background: var(--accent-soft); color: var(--accent); font-size: .66rem; font-weight: 700;
+    padding: 2px 9px; border-radius: 99px; }
+  .proj-prog-track { height: 6px; background: var(--surface-3); border-radius: 99px; overflow: hidden; margin-bottom: 8px; }
+  .proj-prog-fill { height: 100%; border-radius: 99px; background: var(--st-done); transition: width .5s ease; }
+  .proj-meta { display: flex; justify-content: space-between; align-items: center; font-size: .7rem; color: var(--text-mute); }
+  .proj-empty { text-align: center; color: var(--text-mute); font-size: .85rem; padding: 40px 16px; }
+
+  /* chips de tag no formulário de criação */
+  .proj-tag-chip { display: inline-flex; align-items: center; gap: 5px; background: var(--accent-soft); color: var(--accent);
+    font-size: .74rem; font-weight: 600; padding: 3px 6px 3px 10px; border-radius: 99px; }
+  .proj-tag-chip button { border: none; background: none; color: inherit; cursor: pointer; font-size: .85rem; line-height: 1; opacity: .7; padding: 0; }
+  .proj-tag-chip button:hover { opacity: 1; }
+  .proj-tags-input { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 10px;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); }
+  .proj-tags-input input { flex: 1; min-width: 90px; border: none; background: none; outline: none; color: var(--text);
+    font-size: .85rem; font-family: inherit; padding: 2px; }
+
+  /* itens (demandas-filhas) na criação do projeto */
+  .proj-item-row { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; margin-bottom: 8px; }
+  .proj-item-row .pir-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .proj-item-row .pir-titulo { font-size: .85rem; font-weight: 600; }
+  .proj-item-row .pir-meta { font-size: .72rem; color: var(--text-dim); margin-top: 3px; }
+  .proj-add-box { background: var(--surface-2); border: 1px dashed var(--border); border-radius: 10px; padding: 12px; margin-top: 8px; }
+  .proj-add-box .form-grid { gap: 10px; }
+  .proj-mode-toggle { display: flex; gap: 8px; margin-bottom: 10px; }
+  .proj-mode-toggle button { flex: 1; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text-dim); font-size: .78rem; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .proj-mode-toggle button.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  .proj-multi-list { max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px; background: var(--surface-2); }
+
+  /* detalhe do projeto (lista de filhas) */
+  .proj-detail-item { display: flex; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .proj-detail-item:last-child { border-bottom: none; }
+  .proj-detail-item:hover { background: var(--surface-2); }
+  .proj-detail-item .pdi-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .proj-detail-item .pdi-body { flex: 1; min-width: 0; }
+  .proj-detail-item .pdi-titulo { font-size: .85rem; font-weight: 600; }
+  .proj-detail-item .pdi-meta { font-size: .72rem; color: var(--text-mute); margin-top: 2px; }
+  .proj-detail-pend { opacity: .65; }
+  .proj-detail-pend .pdi-titulo::after { content: " (pendente)"; font-weight: 400; color: var(--text-mute); font-size: .72rem; }
   .p-block { padding: 16px 18px 18px; background: rgba(255,255,255,.022);
     border: 1px solid var(--border); border-radius: 16px; }
   body.light .p-block { background: var(--surface); }
@@ -1065,6 +1132,10 @@
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
       <span class="sb-label">Demandas</span>
     </button>
+    <button class="tab-btn" data-tab="projetos" onclick="switchTab('projetos', this)" title="Projetos">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-7l-2-2H5a2 2 0 0 0-2 2z"/></svg>
+      <span class="sb-label">Projetos</span>
+    </button>
     <button class="tab-btn" data-tab="aprovacoes" id="tabBtnAprovacoes" onclick="switchTab('aprovacoes', this)" style="display:none" title="Aprovações">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 5-5"/></svg>
       <span class="sb-label">Aprovações</span><span class="sb-count" id="apprTabCount"></span>
@@ -1117,6 +1188,15 @@
   <!-- ── TAB: KPIs (análise de dados — gráficos) ── -->
   <div id="tab-kpis" class="tab-content">
     <div id="kpisView"></div>
+  </div>
+
+  <!-- ── TAB: PROJETOS ── -->
+  <div id="tab-projetos" class="tab-content">
+    <div class="dataview-bar">
+      <span style="font-size:.78rem;color:var(--text-dim)">Um projeto agrupa várias demandas — cada uma com um responsável.</span>
+      <button class="btn" style="margin-left:auto" onclick="openProjModal()">+ Novo projeto</button>
+    </div>
+    <div id="projetosView"></div>
   </div>
 
   <!-- ── TAB: DEMANDAS (Quadro + Calendário + Listagem unificados) ── -->
@@ -1334,6 +1414,9 @@
           <div class="full env-box" id="envolvidosRow" style="display:none">
             👥 <b>Envolvidos</b> — demanda criada em conjunto para: <span id="envolvidosNomes"></span>
           </div>
+          <div class="full env-box" id="projLinkRow" style="display:none;cursor:pointer" onclick="abrirProjDoLink()">
+            📁 <b>Projeto</b> — <span id="projLinkNome"></span> <span style="color:var(--accent)">— ver etapas →</span>
+          </div>
           <div class="full env-box" id="repactRow" style="display:none"></div>
           <div class="full" id="repactForm" style="display:none">
             <label>Repactuar prazo — novo prazo</label>
@@ -1434,6 +1517,58 @@
         </div>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Novo Projeto -->
+<div class="overlay" id="projOverlay">
+  <div class="modal">
+    <button class="modal-x" onclick="closeProjModal()">✕</button>
+    <h2>Novo projeto</h2>
+    <div class="form-grid">
+      <div class="full">
+        <label>Título do projeto</label>
+        <input type="text" id="pjTitulo" required placeholder="Ex.: Apresentação GRC">
+      </div>
+      <div class="full">
+        <label>Descrição <span style="color:var(--text-mute);font-size:.65rem;text-transform:none;letter-spacing:0">(opcional)</span></label>
+        <textarea id="pjDescricao" placeholder="Contexto geral do projeto"></textarea>
+      </div>
+      <div class="full">
+        <label>Tags</label>
+        <div class="proj-tags-input" id="pjTagsBox">
+          <input type="text" id="pjTagInput" placeholder="Digite e Enter..." onkeydown="if(event.key==='Enter'){event.preventDefault();addProjTag()}">
+        </div>
+      </div>
+      <div class="full">
+        <label>Prazo geral <span style="color:var(--text-mute);font-size:.65rem;text-transform:none;letter-spacing:0">(opcional)</span></label>
+        <input type="date" id="pjPrazo">
+      </div>
+    </div>
+
+    <label style="margin-top:18px;display:block">Etapas do projeto (demandas)</label>
+    <div class="proj-mode-toggle">
+      <button type="button" id="pjModeCustomBtn" class="active" onclick="setProjModo(false)">Etapas diferentes</button>
+      <button type="button" id="pjModeRapidoBtn" onclick="setProjModo(true)">Mesma etapa p/ várias pessoas</button>
+    </div>
+    <div id="pjItensList"></div>
+    <div class="proj-add-box" id="pjAddBox"></div>
+
+    <div class="modal-actions" style="margin-top:18px">
+      <div></div>
+      <div class="right">
+        <button type="button" class="btn btn-ghost" onclick="closeProjModal()">Cancelar</button>
+        <button type="button" class="btn" id="pjSaveBtn" onclick="salvarProjeto()">Criar projeto</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Detalhe do Projeto -->
+<div class="overlay" id="projDetailOverlay">
+  <div class="modal">
+    <button class="modal-x" onclick="closeProjDetail()">✕</button>
+    <div id="projDetailBody"></div>
   </div>
 </div>
 
@@ -1622,6 +1757,7 @@ function taskToRow(t) {
     concluida_em: t.concluidaEm || null,
     envolvidos: t.envolvidos || null,
   };
+  // projeto_id não entra no update genérico (não editável na edição comum; só via fluxos de projeto)
 }
 function rowToTask(r) {
   return {
@@ -1647,6 +1783,7 @@ function rowToTask(r) {
     aprovadorId: r.aprovador_id || null,
     aprovadoEm: r.aprovado_em || null,
     aprovacaoObs: r.aprovacao_obs || null,
+    projetoId: r.projeto_id || null,
   };
 }
 
@@ -1937,6 +2074,7 @@ function switchTab(id, btn) {
   if (id === "historico") renderHistorico();
   if (id === "aprovacoes") renderApprovals();
   if (id === "solicitacoes") renderSolicitacoes();
+  if (id === "projetos") renderProjetos();
 }
 
 /* Visualização interna da aba Demandas: quadro | calendario | listagem */
@@ -2097,9 +2235,15 @@ function renderBoard() {
       const confBadge = t.confidencial ? `<span class="tag conf-tag">🔒 Confidencial</span>` : '';
       const showOwner = (isManagerView() || taskScope === 'solicitadas') && t.userId && String(t.userId) !== String(currentUser && currentUser.id);
       const ownerNm = showOwner ? ownerName(t.userId) : '';
-      return `<div class="task${critica ? ' rel-critica' : ''}${isOnFire ? ' on-fire' : ''}${isPendApr ? ' aguardando-aprov' : ''}" draggable="true" data-id="${t.id}" onclick="openModal('${t.id}')">
+      const proj = t.projetoId ? PROJETOS.find(p => String(p.id) === String(t.projetoId)) : null;
+      const projBanner = proj ? `<div class="t-proj">
+        <span class="t-proj-nome">📁 ${esc(proj.titulo)}</span>
+        ${(proj.tags || []).map(tg => `<span class="t-proj-tag">${esc(tg)}</span>`).join('')}
+      </div>` : '';
+      return `<div class="task${critica ? ' rel-critica' : ''}${isOnFire ? ' on-fire' : ''}${isPendApr ? ' aguardando-aprov' : ''}${proj ? ' has-proj' : ''}" draggable="true" data-id="${t.id}" onclick="openModal('${t.id}')">
         ${critica ? '<div class="t-critica-bar"></div>' : ''}
         ${isOnFire ? '<div class="fire-selo">🔥 Prioridade</div>' : ''}
+        ${projBanner}
         ${t.code ? `<div class="t-id">${t.code}</div>` : ""}
         <div class="t-top">
           ${critica ? '<span class="tag pri-critica">⚡ Prioridade</span>' : ''}
@@ -2309,6 +2453,10 @@ function openModal(id) {
     // registro dos envolvidos (demanda criada em lote via multi-seleção)
     document.getElementById("envolvidosRow").style.display = t.envolvidos ? "" : "none";
     document.getElementById("envolvidosNomes").textContent = t.envolvidos || "";
+    // vínculo com o projeto (se esta demanda for uma etapa de um projeto)
+    const _proj = t.projetoId && PROJETOS.find(p => String(p.id) === String(t.projetoId));
+    document.getElementById("projLinkRow").style.display = _proj ? "" : "none";
+    document.getElementById("projLinkNome").textContent = _proj ? `${_proj.code} — ${_proj.titulo}` : "";
     renderRepactBanner(t);   // faixa de repactuação de prazo + botão "Repactuar"
     setupApprovalBox(t);
     // travas por campo: exec (dono/gestor) edita título/descrição/status/pasta;
@@ -2319,6 +2467,7 @@ function openModal(id) {
     paraRow.style.display = "block";
     montarParaLista(currentUser && currentUser.id);
     document.getElementById("envolvidosRow").style.display = "none";
+    document.getElementById("projLinkRow").style.display = "none";
     document.getElementById("repactRow").style.display = "none";
     document.getElementById("repactForm").style.display = "none";
     document.getElementById("repactBtn").style.display = "none";
@@ -3087,6 +3236,7 @@ function render() {
   if (activeTab === "demandas") renderDataView();
   if (activeTab === "historico") renderHistorico();
   if (activeTab === "kpis") renderKPIs();
+  if (activeTab === "projetos") renderProjetos();
   persist();
 }
 
@@ -3391,6 +3541,278 @@ function renderKPIs() {
     ${mini}
     <div class="kpi-charts">${chStatus}${chPont}${chTempo}${chAging}${chSetor}</div>`;
 }
+/* ══════════ PROJETOS (contêiner de demandas-filhas) ══════════ */
+/* demandas + solicitações pendentes de um projeto (para a lista de detalhe) */
+function projFilhas(projetoId) {
+  const demandas = tasks.filter(t => String(t.projetoId) === String(projetoId));
+  const pendentes = solicitacoes.filter(s => String(s.projeto_id) === String(projetoId) && s.status === 'pendente');
+  return { demandas, pendentes };
+}
+function renderProjetos() {
+  const el = document.getElementById('projetosView');
+  if (!el || !currentUser) return;
+  if (!PROJETOS.length) {
+    el.innerHTML = `<div class="proj-empty">Nenhum projeto ainda. Clique em "+ Novo projeto" para agrupar demandas de várias pessoas em torno de um objetivo comum.</div>`;
+    return;
+  }
+  el.innerHTML = `<div class="proj-grid">${PROJETOS.map(p => {
+    const { demandas, pendentes } = projFilhas(p.id);
+    const tags = (p.tags || []).map(t => `<span class="proj-tag">${esc(t)}</span>`).join('');
+    const total = demandas.length + pendentes.length;
+    return `<div class="proj-card" onclick="abrirProjDetail('${p.id}')">
+      <div class="pc-top"><span class="pc-code">${esc(p.code || '')}</span></div>
+      <h4>${esc(p.titulo)}</h4>
+      ${p.descricao ? `<div class="pc-desc">${esc(p.descricao)}</div>` : ''}
+      ${tags ? `<div class="proj-tags">${tags}</div>` : ''}
+      <div class="proj-prog-track"><div class="proj-prog-fill" style="width:${p.progresso || 0}%"></div></div>
+      <div class="proj-meta">
+        <span>${p.progresso || 0}% concluído</span>
+        <span>${total} etapa${total === 1 ? '' : 's'}${pendentes.length ? ` · ${pendentes.length} pendente${pendentes.length === 1 ? '' : 's'}` : ''}</span>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+/* ── criação ── */
+let projItens = [];        // [{titulo, descricao, para, paraNome, prazo, prioridade}]
+let projTags = [];
+let projModoRapido = false;
+let projMultiPara = [];    // [{id, nome}] — modo rápido: várias pessoas p/ a mesma etapa
+function openProjModal() {
+  if (!currentUser) return;
+  projItens = []; projTags = []; projModoRapido = false; projMultiPara = [];
+  document.getElementById('pjTitulo').value = '';
+  document.getElementById('pjDescricao').value = '';
+  document.getElementById('pjPrazo').value = '';
+  montarParaLista(currentUser.id);
+  renderProjTags();
+  setProjModo(false);
+  document.getElementById('pjSaveBtn').disabled = false;
+  document.getElementById('pjSaveBtn').textContent = 'Criar projeto';
+  document.getElementById('projOverlay').classList.add('open');
+  const fs = document.querySelector('.fab-stack'); if (fs) fs.classList.add('drawer-open');
+  document.getElementById('pjTitulo').focus();
+}
+function closeProjModal() {
+  document.getElementById('projOverlay').classList.remove('open');
+  const fs = document.querySelector('.fab-stack'); if (fs) fs.classList.remove('drawer-open');
+}
+function renderProjTags() {
+  const box = document.getElementById('pjTagsBox');
+  const inp = document.getElementById('pjTagInput');
+  box.querySelectorAll('.proj-tag-chip').forEach(c => c.remove());
+  projTags.slice().reverse().forEach(tag => {
+    const chip = document.createElement('span');
+    chip.className = 'proj-tag-chip';
+    chip.innerHTML = `${esc(tag)}<button type="button" onclick="removeProjTag('${esc(tag)}')">✕</button>`;
+    box.insertBefore(chip, inp);
+  });
+}
+function addProjTag() {
+  const inp = document.getElementById('pjTagInput');
+  const v = (inp.value || '').trim();
+  if (!v) return;
+  if (!projTags.some(t => t.toLowerCase() === v.toLowerCase())) projTags.push(v);
+  inp.value = '';
+  renderProjTags();
+}
+function removeProjTag(tag) { projTags = projTags.filter(t => t !== tag); renderProjTags(); }
+
+function setProjModo(rapido) {
+  projModoRapido = rapido;
+  document.getElementById('pjModeCustomBtn').classList.toggle('active', !rapido);
+  document.getElementById('pjModeRapidoBtn').classList.toggle('active', rapido);
+  renderProjAddBox();
+}
+function renderProjItensList() {
+  const box = document.getElementById('pjItensList');
+  box.innerHTML = projItens.map((it, i) => `<div class="proj-item-row">
+    <div class="pir-top">
+      <div>
+        <div class="pir-titulo">${esc(it.titulo)}</div>
+        <div class="pir-meta">👤 ${esc(it.paraNome)}${it.prazo ? ' · vence ' + fmtDate(it.prazo) : ''}${it.prioridade === 'critica' ? ' · ⚡ crítica' : ''}</div>
+      </div>
+      <button type="button" class="subt-del" title="Remover" onclick="removeProjItem(${i})">✕</button>
+    </div>
+  </div>`).join('') || `<div class="empty-soft">Nenhuma etapa adicionada ainda.</div>`;
+}
+function removeProjItem(i) { projItens.splice(i, 1); renderProjItensList(); }
+function renderProjAddBox() {
+  const box = document.getElementById('pjAddBox');
+  if (!projModoRapido) {
+    box.innerHTML = `
+      <div class="form-grid">
+        <div class="full"><label>Título da etapa</label><input type="text" id="pjItTitulo" placeholder="Ex.: Definir indicadores"></div>
+        <div class="full"><label>Descrição <span style="color:var(--text-mute);font-size:.65rem;text-transform:none;letter-spacing:0">(opcional)</span></label><input type="text" id="pjItDescricao" placeholder="Detalhe rápido"></div>
+        <div><label>Responsável</label><select id="pjItPara">${PARA_LISTA.map(p => `<option value="${esc(String(p.id))}">${esc(p.label)}</option>`).join('')}</select></div>
+        <div><label>Prazo <span style="color:var(--text-mute);font-size:.65rem;text-transform:none;letter-spacing:0">(opcional)</span></label><input type="date" id="pjItPrazo"></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;text-transform:none;font-size:.8rem;color:var(--text)"><input type="checkbox" id="pjItPrioridade" style="width:auto"> Prioridade crítica</label>
+      <button type="button" class="btn btn-ghost" style="margin-top:10px" onclick="addProjItemCustom()">+ Adicionar etapa</button>`;
+  } else {
+    const meId = String(currentUser && currentUser.id);
+    box.innerHTML = `
+      <div class="form-grid">
+        <div class="full"><label>Título da etapa (igual p/ todos)</label><input type="text" id="pjItTitulo" placeholder="Ex.: Auditoria de estoque da loja"></div>
+        <div class="full"><label>Descrição <span style="color:var(--text-mute);font-size:.65rem;text-transform:none;letter-spacing:0">(opcional)</span></label><input type="text" id="pjItDescricao" placeholder="Detalhe rápido"></div>
+        <div><label>Prazo <span style="color:var(--text-mute);font-size:.65rem;text-transform:none;letter-spacing:0">(opcional)</span></label><input type="date" id="pjItPrazo"></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;margin:8px 0;text-transform:none;font-size:.8rem;color:var(--text)"><input type="checkbox" id="pjItPrioridade" style="width:auto"> Prioridade crítica</label>
+      <label>Responsáveis (marque todos que vão executar esta etapa)</label>
+      <div class="proj-multi-list">${PARA_LISTA.filter(p => String(p.id) !== meId).map(p => `
+        <label class="fck"><input type="checkbox" value="${esc(String(p.id))}" onchange="toggleProjMultiPara('${esc(String(p.id))}','${esc(p.nome)}',this.checked)"><span>${esc(p.label)}</span></label>`).join('')}</div>
+      <button type="button" class="btn btn-ghost" style="margin-top:10px" onclick="addProjItemRapido()">+ Adicionar etapa para os marcados</button>`;
+  }
+}
+function toggleProjMultiPara(id, nome, checked) {
+  if (checked) { if (!projMultiPara.some(x => x.id === id)) projMultiPara.push({ id, nome }); }
+  else projMultiPara = projMultiPara.filter(x => x.id !== id);
+}
+function addProjItemCustom() {
+  const titulo = (document.getElementById('pjItTitulo').value || '').trim();
+  const paraId = document.getElementById('pjItPara').value;
+  if (!titulo) { alert('Informe o título da etapa.'); return; }
+  if (!paraId) { alert('Escolha o responsável.'); return; }
+  const p = PARA_LISTA.find(x => String(x.id) === String(paraId));
+  projItens.push({
+    titulo, descricao: (document.getElementById('pjItDescricao').value || '').trim(),
+    para: paraId, paraNome: p ? p.nome : '—',
+    prazo: document.getElementById('pjItPrazo').value || null,
+    prioridade: document.getElementById('pjItPrioridade').checked ? 'critica' : 'normal',
+  });
+  document.getElementById('pjItTitulo').value = ''; document.getElementById('pjItDescricao').value = '';
+  document.getElementById('pjItPrazo').value = ''; document.getElementById('pjItPrioridade').checked = false;
+  renderProjItensList();
+}
+function addProjItemRapido() {
+  const titulo = (document.getElementById('pjItTitulo').value || '').trim();
+  if (!titulo) { alert('Informe o título da etapa.'); return; }
+  if (!projMultiPara.length) { alert('Marque ao menos um responsável.'); return; }
+  const descricao = (document.getElementById('pjItDescricao').value || '').trim();
+  const prazo = document.getElementById('pjItPrazo').value || null;
+  const prioridade = document.getElementById('pjItPrioridade').checked ? 'critica' : 'normal';
+  projMultiPara.forEach(pessoa => {
+    projItens.push({ titulo, descricao, para: pessoa.id, paraNome: pessoa.nome, prazo, prioridade });
+  });
+  document.getElementById('pjItTitulo').value = ''; document.getElementById('pjItDescricao').value = '';
+  document.getElementById('pjItPrazo').value = ''; document.getElementById('pjItPrioridade').checked = false;
+  projMultiPara = [];
+  document.querySelectorAll('.proj-multi-list input[type=checkbox]').forEach(c => c.checked = false);
+  renderProjItensList();
+}
+async function salvarProjeto() {
+  const titulo = (document.getElementById('pjTitulo').value || '').trim();
+  if (!titulo) { alert('Informe o título do projeto.'); return; }
+  if (!projItens.length) { alert('Adicione ao menos uma etapa (demanda) ao projeto.'); return; }
+  if (!sb) { alert('Sem conexão com o servidor.'); return; }
+  const btn = document.getElementById('pjSaveBtn'); btn.disabled = true; btn.textContent = 'Criando...';
+  try {
+    const itensPayload = projItens.map(it => ({
+      titulo: it.titulo, descricao: it.descricao || null, para: it.para, prazo: it.prazo, prioridade: it.prioridade,
+    }));
+    const { error } = await sb.rpc('criar_projeto', {
+      p_titulo: titulo,
+      p_descricao: (document.getElementById('pjDescricao').value || '').trim() || null,
+      p_tags: projTags,
+      p_prazo: document.getElementById('pjPrazo').value || null,
+      p_itens: itensPayload,
+    });
+    if (error) throw error;
+    showToast('Projeto criado 🎉', `${itensPayload.length} etapa${itensPayload.length === 1 ? '' : 's'} distribuída${itensPayload.length === 1 ? '' : 's'}.`);
+    closeProjModal();
+    await loadProjetos();
+    await loadSolicitacoes();
+    await loadFromSupabase();
+    await loadNotificacoes();
+  } catch (e) {
+    alert('Falha ao criar projeto: ' + (e.message || e));
+    btn.disabled = false; btn.textContent = 'Criar projeto';
+  }
+}
+
+/* ── detalhe ── */
+function abrirProjDetail(projetoId) {
+  const p = PROJETOS.find(x => String(x.id) === String(projetoId));
+  if (!p) return;
+  const { demandas, pendentes } = projFilhas(projetoId);
+  const tags = (p.tags || []).map(t => `<span class="proj-tag">${esc(t)}</span>`).join('');
+  const statusDot = t => t.status === 'concluido' ? 'var(--st-done)' : (t.prazo && t.prazo < today() && t.status !== 'concluido') ? 'var(--st-late)' : 'var(--st-pend)';
+  const rowsDemandas = demandas.map(t => `<div class="proj-detail-item" onclick="closeProjDetail(); openModal('${t.id}')">
+      <span class="pdi-dot" style="background:${statusDot(t)}"></span>
+      <div class="pdi-body"><div class="pdi-titulo">${esc(t.titulo)}</div>
+        <div class="pdi-meta">${t.code ? t.code + ' · ' : ''}👤 ${esc(ownerName(t.userId))} · ${esc(STATUS_LABEL[t.status] || t.status)}${t.prazo ? ' · vence ' + fmtDate(t.prazo) : ''}</div></div>
+    </div>`).join('');
+  const rowsPendentes = pendentes.map(s => `<div class="proj-detail-item proj-detail-pend" style="cursor:default">
+      <span class="pdi-dot" style="background:var(--text-mute)"></span>
+      <div class="pdi-body"><div class="pdi-titulo">${esc(s.titulo)}</div>
+        <div class="pdi-meta">👤 ${esc(nomeDe(s.para_user_id))} · aguardando aceite</div></div>
+    </div>`).join('');
+  const lista = (rowsDemandas + rowsPendentes) || `<div class="empty-soft">Nenhuma etapa neste projeto ainda.</div>`;
+  document.getElementById('projDetailBody').innerHTML = `
+    <div style="font-size:.63rem;color:var(--text-mute);font-weight:700;letter-spacing:.5px">${esc(p.code || '')}</div>
+    <h2 style="margin:4px 0 10px">${esc(p.titulo)}</h2>
+    ${p.descricao ? `<div style="font-size:.85rem;color:var(--text-dim);margin-bottom:12px">${esc(p.descricao)}</div>` : ''}
+    ${tags ? `<div class="proj-tags">${tags}</div>` : ''}
+    <div class="proj-prog-track" style="margin-top:12px"><div class="proj-prog-fill" style="width:${p.progresso || 0}%"></div></div>
+    <div class="proj-meta" style="margin-bottom:16px"><span>${p.progresso || 0}% concluído</span><span>Coordenado por ${esc(nomeDe(p.criado_por))}${p.prazo ? ' · prazo ' + fmtDate(p.prazo) : ''}</span></div>
+    <label>Etapas (${demandas.length + pendentes.length})</label>
+    <div class="p-block" style="margin-top:8px;padding:6px 10px">${lista}</div>
+    ${podeGerirProjeto(p) ? `<div class="modal-actions" style="margin-top:20px">
+      <button type="button" class="btn btn-ghost" onclick="desvincularProjeto('${p.id}')">Desvincular demandas</button>
+      <div class="right"><button type="button" class="btn btn-danger" onclick="excluirProjetoTudo('${p.id}')">Excluir projeto</button></div>
+    </div>
+    <div style="font-size:.68rem;color:var(--text-mute);margin-top:8px;line-height:1.5">
+      <b>Desvincular:</b> remove só o projeto; as demandas continuam existindo (soltas).<br>
+      <b>Excluir projeto:</b> apaga o projeto <b>e todas as demandas atreladas</b>, para todos. Irreversível.
+    </div>` : ''}`;
+  document.getElementById('projDetailOverlay').classList.add('open');
+  const fs = document.querySelector('.fab-stack'); if (fs) fs.classList.add('drawer-open');
+}
+/* só o criador do projeto, o gestor dele, ou admin (dev/master) */
+function podeGerirProjeto(p) {
+  if (!p || !currentUser) return false;
+  const me = String(currentUser.id);
+  if (String(p.criado_por) === me) return true;
+  if (currentUser.perfil === 'desenvolvedor' || currentUser.perfil === 'gestor_master') return true;
+  return lideradosIds().has(String(p.criado_por));   // sou gestor direto do criador
+}
+async function desvincularProjeto(id) {
+  if (!sb) { alert('Sem conexão com o servidor.'); return; }
+  if (!confirm('Desvincular as demandas deste projeto? O projeto será removido, mas as demandas continuam existindo (viram demandas normais).')) return;
+  try {
+    const { error } = await sb.rpc('excluir_projeto', { p_projeto: id, p_apagar_demandas: false });
+    if (error) throw error;
+    showToast('Projeto removido', 'As demandas foram desvinculadas e mantidas.');
+    closeProjDetail();
+    await loadProjetos(); await loadFromSupabase(); await loadSolicitacoes();
+  } catch (e) { alert('Falha ao remover projeto: ' + (e.message || e)); }
+}
+async function excluirProjetoTudo(id) {
+  if (!sb) { alert('Sem conexão com o servidor.'); return; }
+  const p = PROJETOS.find(x => String(x.id) === String(id));
+  const { demandas, pendentes } = projFilhas(id);
+  const n = demandas.length + pendentes.length;
+  if (!confirm(`EXCLUIR o projeto "${p ? p.titulo : ''}" e TODAS as ${n} demanda(s) atrelada(s), para todos os usuários?\n\nEsta ação é irreversível.`)) return;
+  try {
+    const { error } = await sb.rpc('excluir_projeto', { p_projeto: id, p_apagar_demandas: true });
+    if (error) throw error;
+    showToast('Projeto excluído', 'Projeto e demandas removidos.');
+    closeProjDetail();
+    await loadProjetos(); await loadFromSupabase(); await loadSolicitacoes(); await loadNotificacoes();
+  } catch (e) { alert('Falha ao excluir projeto: ' + (e.message || e)); }
+}
+function closeProjDetail() {
+  document.getElementById('projDetailOverlay').classList.remove('open');
+  const fs = document.querySelector('.fab-stack'); if (fs) fs.classList.remove('drawer-open');
+}
+/* clique no chip "📁 Projeto" dentro do drawer de uma demanda — fecha a demanda e abre o projeto */
+function abrirProjDoLink() {
+  const t = tasks.find(x => String(x.id) === String(editingId));
+  if (!t || !t.projetoId) return;
+  closeModal();
+  abrirProjDetail(t.projetoId);
+}
+
 function motivoFoco(t) {
   // motivo discreto quando a priorização NÃO vem do prazo (prioridade crítica sem prazo)
   if (t.prioridade === 'critica' && !t.prazo) {
@@ -3721,7 +4143,7 @@ async function loadNotificacoes() {
   if (!sb) return;
   try {
     const { data, error } = await sb.from("notificacoes")
-      .select("*").order("created_at", { ascending: false }).limit(50);
+      .select("*").order("created_at", { ascending: false }).limit(200);   // 200 p/ o histórico de menções ser útil
     if (error) throw error;
     notifs = data || [];
     renderBell();
@@ -3735,7 +4157,7 @@ function fmtNotifTime(iso) {
 function notifTemDestino(n) {
   if (!n) return false;
   if (n.demanda_code || n.solicitacao_id) return true;
-  return ['solicitacao_recebida', 'solicitacao_aceita', 'solicitacao_recusada', 'aprovacao_solicitada'].includes(n.tipo);
+  return ['solicitacao_recebida', 'solicitacao_aceita', 'solicitacao_recusada', 'aprovacao_solicitada', 'projeto'].includes(n.tipo);
 }
 /* marca UMA notificação como lida (otimista + servidor) */
 async function marcarNotifLida(n) {
@@ -3769,6 +4191,9 @@ function abrirNotificacao(nid) {
     return;
   }
 
+  // 2b) projeto (confirmação ao criador) → aba Projetos
+  if (n.tipo === 'projeto') { switchTab('projetos'); return; }
+
   // 3) solicitações (recebida/aceita/recusada) → aba Solicitações, destacando a linha
   if (n.solicitacao_id ||
       ['solicitacao_recebida', 'solicitacao_aceita', 'solicitacao_recusada'].includes(n.tipo)) {
@@ -3787,11 +4212,12 @@ function abrirDemandaPorCode(code, aba) {
   openModal(t.id);
   if (aba) setModalTab(aba);
 }
-const NOTIF_ICO = { enviada: "📤", aprovacao_solicitada: "🔔", aprovada: "✅", reprovada: "⛔", info: "ℹ️", solicitacao_recebida: "📨", solicitacao_aceita: "✅", solicitacao_recusada: "⛔", mencao: "💬", status_demanda: "🔁", repactuacao: "🕐" };
-function notifRow(n) {
-  return `<div class="notif unread n-${n.tipo}${notifTemDestino(n) ? ' notif-click' : ''}" onclick="abrirNotificacao(${n.id})">
+const NOTIF_ICO = { enviada: "📤", aprovacao_solicitada: "🔔", aprovada: "✅", reprovada: "⛔", info: "ℹ️", solicitacao_recebida: "📨", solicitacao_aceita: "✅", solicitacao_recusada: "⛔", mencao: "💬", status_demanda: "🔁", repactuacao: "🕐", projeto: "📁", projeto_excluido: "🗑️" };
+function notifRow(n, withDelete) {
+  return `<div class="notif ${n.lida ? 'lida' : 'unread'} n-${n.tipo}${notifTemDestino(n) ? ' notif-click' : ''}" onclick="abrirNotificacao(${n.id})">
     <div class="n-ico">${NOTIF_ICO[n.tipo] || "•"}</div>
     <div class="n-body"><div class="n-msg">${esc(n.mensagem)}</div><div class="n-time">${fmtNotifTime(n.created_at)}${notifTemDestino(n) ? ' · toque para abrir' : ''}</div></div>
+    ${withDelete ? `<button type="button" class="notif-del" title="Excluir menção" onclick="event.stopPropagation(); excluirMencao(${n.id})">✕</button>` : ''}
   </div>`;
 }
 /* Sino: todas as notificações, EXCETO menções (que têm ícone próprio). */
@@ -3806,17 +4232,24 @@ function renderBell() {
   document.getElementById("bellWrap").classList.toggle("has-alert", naoLidas.length > 0);
   renderMencoes();
 }
-/* Balão de conversa: só menções (@). */
+/* Balão de conversa: HISTÓRICO de menções (@) — lidas + não lidas; dá p/ excluir. */
 function renderMencoes() {
-  const naoLidas = notifs.filter(n => !n.lida && n.tipo === 'mencao');
+  const mencoes = notifs.filter(n => n.tipo === 'mencao');
+  const naoLidas = mencoes.filter(n => !n.lida);
   const badge = document.getElementById("mencoesBadge");
   if (!badge) return;
-  badge.style.display = naoLidas.length ? "flex" : "none";
+  badge.style.display = naoLidas.length ? "flex" : "none";     // badge conta só as NÃO lidas
   badge.textContent = naoLidas.length > 9 ? "9+" : naoLidas.length;
   const list = document.getElementById("mencoesList");
-  list.innerHTML = naoLidas.length ? naoLidas.map(notifRow).join("")
-    : `<div class="bell-empty">Nenhuma menção nova.</div>`;
+  list.innerHTML = mencoes.length ? mencoes.map(n => notifRow(n, true)).join("")
+    : `<div class="bell-empty">Nenhuma menção ainda.</div>`;
   document.getElementById("mencoesWrap").classList.toggle("has-alert", naoLidas.length > 0);
+}
+/* exclui uma menção do histórico (otimista + servidor) */
+async function excluirMencao(id) {
+  notifs = notifs.filter(n => String(n.id) !== String(id));
+  renderMencoes(); renderBell();
+  if (sb) { try { await sb.from("notificacoes").delete().eq("id", id); } catch (e) { console.warn("Falha ao excluir menção:", e.message || e); } }
 }
 function toggleBell(e) {
   e.stopPropagation();
@@ -3902,6 +4335,16 @@ async function decidirAprovacao(id, aprovar) {
 
 /* ══════════ SOLICITAÇÕES (pedir demanda a outra pessoa) ══════════ */
 let solicitacoes = [];
+let PROJETOS = [];
+async function loadProjetos() {
+  if (!sb) return;
+  try {
+    const { data, error } = await sb.from("projetos").select("*").order("created_at", { ascending: false });
+    if (error) throw error;
+    PROJETOS = data || [];
+    if (activeTab === "projetos") renderProjetos();
+  } catch (e) { console.warn("Falha ao carregar projetos (rode projetos.sql?):", e.message || e); }
+}
 function nomeDe(uid) { const p = PROFILES_BY_ID[uid]; return p ? p.nome : "—"; }
 // uuids de quem responde diretamente ao usuário logado (gestor_matricula = minha matrícula)
 function lideradosIds() {
@@ -3940,6 +4383,7 @@ async function responderSolicitacao(id, aceitar) {
     await loadSolicitacoes();
     await loadFromSupabase();
     await loadNotificacoes();
+    await loadProjetos();
   } catch (e) { alert("Falha: " + (e.message || e)); }
 }
 let solicFilt = { busca: '', status: '' };
@@ -4043,6 +4487,7 @@ async function bootApp(user) {
     await loadFromSupabase();
     await loadNotificacoes();
     await loadSolicitacoes();
+    await loadProjetos();
     // veio do menu em "Configurações"
     if (location.hash === '#config') {
       setTimeout(function () {
