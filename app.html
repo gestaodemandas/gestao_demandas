@@ -162,7 +162,7 @@
   .sync-chip.syncing .dot { background: var(--blue); animation: pulse 1s infinite; }
   @keyframes pulse { 50% { opacity: .3; } }
 
-  main { padding: 24px 28px 60px; max-width: 1500px; margin: 0 auto; }
+  main { padding: 24px 28px 60px; max-width: 2000px; margin: 0 auto; width: 100%; flex: 1; min-height: 0; overflow-y: auto; }
 
   /* ===== KPI Cards ===== */
   .dash {
@@ -731,6 +731,16 @@
   .newbar { display: flex; justify-content: flex-end; margin-top: 16px; }
   .p-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
   @media (max-width: 820px) { .p-row2 { grid-template-columns: 1fr; } }
+
+  /* 4 listas de demandas abaixo dos cartões (Pendentes/Atrasadas/Backlog/Concluídas) */
+  .cat-lists-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 14px 0 6px; }
+  @media (max-width: 1100px) { .cat-lists-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 640px) { .cat-lists-grid { grid-template-columns: 1fr; } }
+  .cat-list-block { display: flex; flex-direction: column; min-width: 0; }
+  .cat-list-block .pb-label { display: flex; align-items: center; justify-content: space-between; }
+  .cat-count { background: var(--surface-3); color: var(--text-dim); font-size: .68rem; font-weight: 700;
+    padding: 1px 8px; border-radius: 99px; letter-spacing: 0; text-transform: none; }
+  .cat-list-body { max-height: 280px; overflow-y: auto; }
   .p-block { padding: 16px 18px 18px; background: rgba(255,255,255,.022);
     border: 1px solid var(--border); border-radius: 16px; }
   body.light .p-block { background: var(--surface); }
@@ -929,6 +939,79 @@
   .auto-block .ab-k { font-size: .6rem; text-transform: uppercase; letter-spacing: .6px; color: var(--text-mute); }
   .auto-block .ab-v { font-size: .82rem; font-weight: 700; color: var(--text); }
   .gestor-only { display: none; }
+
+  /* ════════ Barra lateral retrátil + coluna de conteúdo ════════ */
+  .appwin { display: flex; align-items: stretch; width: calc(100% - 40px); max-width: 2200px; height: calc(100vh - 40px); }
+  .app-main-col { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+  header.chrome { border-radius: 0; flex-shrink: 0; }
+
+  .app-sidebar {
+    width: 216px; flex-shrink: 0; display: flex; flex-direction: column;
+    background: var(--surface-2); border-right: 1px solid var(--border);
+    transition: width .22s ease; overflow: hidden; position: relative;
+  }
+  body:not(.light) .app-sidebar { background: rgba(255,255,255,.03); }
+  .appwin.sidebar-collapsed .app-sidebar { width: 72px; }
+
+  .sb-top { display: flex; flex-direction: column; align-items: center; gap: 9px; padding: 14px 12px 16px; border-bottom: 1px solid var(--border); }
+  .sb-burger {
+    width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text-dim); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transition: all .15s; align-self: flex-end;
+  }
+  .sb-burger:hover { color: var(--accent); border-color: var(--accent); }
+  .appwin.sidebar-collapsed .sb-burger { align-self: center; }
+  .sb-logo {
+    width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+    box-shadow: 0 3px 12px rgba(200,32,58,.4);
+  }
+  .sb-logo img { width: 100%; height: 100%; border-radius: 50%; display: block; object-fit: cover; }
+  .sb-version { font-size: .62rem; color: var(--text-mute); font-weight: 500; opacity: .75; letter-spacing: .3px; }
+  .appwin.sidebar-collapsed .sb-version { display: none; }
+
+  .sb-nav { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 18px 12px; overflow-y: auto; }
+  .app-sidebar .tab-btn {
+    justify-content: flex-start; width: 100%; padding: 14px 15px; border-radius: 11px;
+    white-space: nowrap; position: relative; font-size: .82rem; gap: 11px;
+  }
+  .app-sidebar .tab-btn svg { flex-shrink: 0; width: 17px; height: 17px; }
+  .app-sidebar .tab-btn.active::after { display: none; }
+  .appwin.sidebar-collapsed .app-sidebar .tab-btn { justify-content: center; padding: 15px; }
+  .appwin.sidebar-collapsed .app-sidebar .tab-btn .sb-label,
+  .appwin.sidebar-collapsed .app-sidebar .tab-btn .sb-count { display: none; }
+  .sb-count {
+    margin-left: auto; background: var(--accent); color: #fff; font-size: .66rem; font-weight: 700;
+    padding: 1px 7px; border-radius: 99px; line-height: 1.5;
+  }
+  .sb-count:empty { display: none; }
+
+  .sb-bottom { padding: 12px 10px 16px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+  .sb-bottom .user-chip { width: 100%; }
+  .appwin.sidebar-collapsed .sb-bottom .user-chip { justify-content: center; padding: 8px; }
+  .appwin.sidebar-collapsed .sb-bottom .user-chip .u-text { display: none; }
+  .sb-bottom #gearBtn { width: 100%; border-radius: 10px; }
+  .appwin.sidebar-collapsed .sb-bottom #gearBtn { width: 40px; margin: 0 auto; }
+
+  /* botões flutuantes (notificações + menções) — vermelhos, redondos, 3D, lado a lado */
+  .fab-stack { position: fixed; right: 26px; bottom: 26px; display: flex; flex-direction: row; gap: 14px; z-index: 200; }
+  .fab { position: relative; }
+  .fab-btn {
+    width: 54px; height: 54px; border-radius: 50%; border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; color: #fff;
+    background: linear-gradient(155deg, var(--accent-bright), var(--accent) 60%, var(--ember-bright, #a01d2d) 130%);
+    box-shadow: 0 10px 20px -6px rgba(200,32,58,.55), 0 3px 8px rgba(0,0,0,.3), inset 0 1px 1px rgba(255,255,255,.35), inset 0 -3px 6px rgba(0,0,0,.25);
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .fab-btn:hover { transform: translateY(-2px); box-shadow: 0 14px 26px -6px rgba(200,32,58,.6), 0 4px 10px rgba(0,0,0,.32), inset 0 1px 1px rgba(255,255,255,.4), inset 0 -3px 6px rgba(0,0,0,.25); }
+  .fab-btn:active { transform: translateY(0); }
+  /* pisca/realça quando há notificação ou menção não lida */
+  .fab.has-alert .fab-btn { animation: fabPulse 1.8s ease-in-out infinite; }
+  @keyframes fabPulse {
+    0%, 100% { box-shadow: 0 10px 20px -6px rgba(200,32,58,.55), 0 3px 8px rgba(0,0,0,.3), inset 0 1px 1px rgba(255,255,255,.35), inset 0 -3px 6px rgba(0,0,0,.25), 0 0 0 0 rgba(200,32,58,.55); }
+    50% { box-shadow: 0 10px 20px -6px rgba(200,32,58,.55), 0 3px 8px rgba(0,0,0,.3), inset 0 1px 1px rgba(255,255,255,.35), inset 0 -3px 6px rgba(0,0,0,.25), 0 0 0 10px rgba(200,32,58,0); }
+  }
+  .fab-badge { top: -3px; right: -3px; box-shadow: 0 0 0 2px var(--bg); }
+  .fab-dropdown { top: auto; bottom: calc(100% + 14px); right: 0; }
 </style>
 </head>
 <body class="locked">
@@ -953,38 +1036,57 @@
 </div>
 
 <div class="appwin">
+<aside class="app-sidebar" id="appSidebar">
+  <div class="sb-top">
+    <button class="sb-burger" id="sbBurger" onclick="toggleSidebar()" title="Expandir/retrair menu">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="sb-logo"><img src="logo-fc.png" alt="Ferreira Costa"></div>
+    <div class="sb-version"><span class="wm-ver" id="appVersion"></span></div>
+  </div>
+  <nav class="sb-nav tabs-nav">
+    <button class="tab-btn active" data-tab="painel" onclick="switchTab('painel', this)" title="Painel">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+      <span class="sb-label">Painel</span>
+    </button>
+    <button class="tab-btn" data-tab="kpis" onclick="switchTab('kpis', this)" title="KPIs">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="12" width="4" height="8" rx="1"/><rect x="10" y="7" width="4" height="13" rx="1"/><rect x="17" y="3" width="4" height="17" rx="1"/></svg>
+      <span class="sb-label">KPIs</span>
+    </button>
+    <button class="tab-btn" data-tab="demandas" onclick="switchTab('demandas', this)" title="Demandas">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+      <span class="sb-label">Demandas</span>
+    </button>
+    <button class="tab-btn" data-tab="aprovacoes" id="tabBtnAprovacoes" onclick="switchTab('aprovacoes', this)" style="display:none" title="Aprovações">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 5-5"/></svg>
+      <span class="sb-label">Aprovações</span><span class="sb-count" id="apprTabCount"></span>
+    </button>
+    <button class="tab-btn" data-tab="solicitacoes" onclick="switchTab('solicitacoes', this)" title="Solicitações">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
+      <span class="sb-label">Solicitações</span><span class="sb-count" id="solicTabCount"></span>
+    </button>
+    <button class="tab-btn" data-tab="historico" onclick="switchTab('historico', this)" title="Histórico">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v6h6"/><path d="M3.5 9a9 9 0 1 1-.7 4.8"/><path d="M12 7v5l3 2"/></svg>
+      <span class="sb-label">Histórico</span>
+    </button>
+  </nav>
+  <div class="sb-bottom">
+    <span class="user-chip" id="userChip" title="Usuário autenticado" style="display:none">
+      <span class="avatar" id="userAvatar">--</span>
+      <span class="u-text"><span id="userNome">—</span><br><span class="u-perfil" id="userPerfil"></span></span>
+    </span>
+    <button class="btn-icon" id="gearBtn" onclick="openSettings()" title="Configurações" style="display:none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+  </div>
+</aside>
+
+<div class="app-main-col">
 <header class="chrome">
   <div class="brand-fc">
-    <span class="logo"><img src="logo-fc.png" alt="Ferreira Costa"></span>
-    <div class="wm">Gestão Demandas Estratégicas<span>Auditoria, Riscos & Compliance</span><span class="wm-ver" id="appVersion"></span></div>
+    <div class="wm">Gestão Demandas Estratégicas<span>Auditoria, Riscos & Compliance</span></div>
   </div>
   <div class="header-actions">
     <div class="sync-chip" id="syncChip" onclick="refreshData()" title="Clique para atualizar os dados">
       <span class="dot"></span><span id="syncLabel">Carregando...</span>
-    </div>
-    <div class="bell-wrap" id="bellWrap" style="display:none">
-      <button class="btn-icon bell-btn" id="bellBtn" onclick="toggleBell(event)" title="Notificações">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="bell-badge" id="bellBadge" style="display:none">0</span>
-      </button>
-      <div class="bell-dropdown" id="bellDropdown">
-        <div class="bell-head">
-          <span>Notificações</span>
-          <button onclick="markAllRead()">Marcar todas como lidas</button>
-        </div>
-        <div class="bell-list" id="bellList"></div>
-      </div>
-    </div>
-    <div class="bell-wrap" id="mencoesWrap" style="display:none">
-      <button class="btn-icon bell-btn" id="mencoesBtn" onclick="toggleMencoes(event)" title="Menções">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span class="bell-badge" id="mencoesBadge" style="display:none">0</span>
-      </button>
-      <div class="bell-dropdown" id="mencoesDropdown">
-        <div class="bell-head">
-          <span>Menções</span>
-          <button onclick="markAllMencoesRead()">Marcar todas como lidas</button>
-        </div>
-        <div class="bell-list" id="mencoesList"></div>
-      </div>
     </div>
     <div class="filtros-wrap" id="filtrosWrap" style="display:none">
       <button class="btn-icon" id="filtrosBtn" onclick="toggleFiltros(event)" title="Filtros">
@@ -995,25 +1097,10 @@
     </div>
     <button class="btn-icon" id="themeBtn" onclick="toggleTheme()" title="Alternar tema claro/escuro"></button>
     <button class="btn-icon" id="fsBtn" onclick="toggleFullscreen()" title="Tela cheia"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button>
-    <span class="user-chip" id="userChip" title="Usuário autenticado" style="display:none">
-      <span class="avatar" id="userAvatar">--</span>
-      <span><span id="userNome">—</span><br><span class="u-perfil" id="userPerfil"></span></span>
-    </span>
-    <button class="btn-icon" id="gearBtn" onclick="openSettings()" title="Configurações" style="display:none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
   </div>
 </header>
 
 <main>
-  <!-- Navegação por abas (sem ícones, sem caixa) -->
-  <nav class="tabs-nav">
-    <button class="tab-btn active" data-tab="painel" onclick="switchTab('painel', this)">Painel</button>
-    <button class="tab-btn" data-tab="kpis" onclick="switchTab('kpis', this)">KPIs</button>
-    <button class="tab-btn" data-tab="demandas" onclick="switchTab('demandas', this)">Demandas</button>
-    <button class="tab-btn" data-tab="aprovacoes" id="tabBtnAprovacoes" onclick="switchTab('aprovacoes', this)" style="display:none">Aprovações <span id="apprTabCount"></span></button>
-    <button class="tab-btn" data-tab="solicitacoes" onclick="switchTab('solicitacoes', this)">Solicitações <span id="solicTabCount"></span></button>
-    <button class="tab-btn" data-tab="historico" onclick="switchTab('historico', this)">Histórico</button>
-  </nav>
-
   <!-- ── TAB: PAINEL ── -->
   <div id="tab-painel" class="tab-content active">
     <div id="painelView"></div>
@@ -1171,6 +1258,37 @@
     </div>
   </div>
 </main>
+</div><!-- /app-main-col -->
+</div><!-- /appwin -->
+
+<!-- Botões flutuantes: notificações + menções (fixos no canto inferior direito, não ocupam layout) -->
+<div class="fab-stack">
+  <div class="bell-wrap fab" id="bellWrap" style="display:none">
+    <button class="fab-btn" id="bellBtn" onclick="toggleBell(event)" title="Notificações">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span class="bell-badge fab-badge" id="bellBadge" style="display:none">0</span>
+    </button>
+    <div class="bell-dropdown fab-dropdown" id="bellDropdown">
+      <div class="bell-head">
+        <span>Notificações</span>
+        <button onclick="markAllRead()">Marcar todas como lidas</button>
+      </div>
+      <div class="bell-list" id="bellList"></div>
+    </div>
+  </div>
+  <div class="bell-wrap fab" id="mencoesWrap" style="display:none">
+    <button class="fab-btn" id="mencoesBtn" onclick="toggleMencoes(event)" title="Menções">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span class="bell-badge fab-badge" id="mencoesBadge" style="display:none">0</span>
+    </button>
+    <div class="bell-dropdown fab-dropdown" id="mencoesDropdown">
+      <div class="bell-head">
+        <span>Menções</span>
+        <button onclick="markAllMencoesRead()">Marcar todas como lidas</button>
+      </div>
+      <div class="bell-list" id="mencoesList"></div>
+    </div>
+  </div>
 </div>
 
 <!-- Modal -->
@@ -3205,7 +3323,8 @@ function focoItemHtml(t, fire) {
   const late = t.prazo && t.prazo < today() && t.status !== 'concluido';
   const crit = t.prioridade === 'critica';
   const barColor = late ? 'var(--st-late)' : (t.status === 'concluido' ? 'var(--st-done)' : 'var(--st-pend)');
-  const when = aguardandoAprov(t) ? 'aguardando aprovação' : (late ? 'atrasada' : (t.prazo ? 'vence ' + fmtDate(t.prazo) : 'sem prazo'));
+  const when = t.status === 'concluido' ? ('concluída' + (t.concluidaEm ? ' ' + fmtDate(t.concluidaEm) : ''))
+    : aguardandoAprov(t) ? 'aguardando aprovação' : (late ? 'atrasada' : (t.prazo ? 'vence ' + fmtDate(t.prazo) : 'sem prazo'));
   const flame = (fire.has(String(t.id))) ? '🔥 ' : '';
   const motivo = motivoFoco(t);
   const motivoTag = motivo
@@ -3307,6 +3426,31 @@ function renderPainel() {
   const foco = focoList(mine);
   const focoHtml = foco.length ? foco.map(t => focoItemHtml(t, fire)).join('') : '<div class="empty-soft">Nada urgente por aqui. 👏</div>';
 
+  // 4 listas abaixo dos cartões — MESMOS critérios do painelStats, pra contagem sempre bater com o cartão
+  const abertaFn = t => t.status !== 'concluido' && !aguardandoAprov(t);
+  const porPrazoAsc = (a, b) => {
+    if (!a.prazo && !b.prazo) return 0;
+    if (!a.prazo) return 1;
+    if (!b.prazo) return -1;
+    return a.prazo.localeCompare(b.prazo);
+  };
+  const listPendentes = mine.filter(t => abertaFn(t) && t.status !== 'backlog').sort(porPrazoAsc);
+  const listAtrasadas = mine.filter(t => abertaFn(t) && t.prazo && t.prazo < today()).sort(porPrazoAsc);
+  const listBacklog = mine.filter(t => t.status === 'backlog')
+    .sort((a, b) => (a.criadaEm || '').localeCompare(b.criadaEm || ''));
+  const listConcluidas = mine.filter(t => t.status === 'concluido')
+    .sort((a, b) => (b.concluidaEm || '').localeCompare(a.concluidaEm || ''));
+  const catBox = (titulo, arr) => `<div class="p-block cat-list-block">
+    <span class="pb-label">${esc(titulo)}<span class="cat-count">${arr.length}</span></span>
+    <div class="cat-list-body">${arr.length ? arr.map(t => focoItemHtml(t, fire)).join('') : '<div class="empty-soft">Nenhuma demanda aqui.</div>'}</div>
+  </div>`;
+  const catLists = `<div class="cat-lists-grid">
+    ${catBox('Pendentes', listPendentes)}
+    ${catBox('Atrasadas', listAtrasadas)}
+    ${catBox('Backlog', listBacklog)}
+    ${catBox('Concluídas', listConcluidas)}
+  </div>`;
+
   let rightBlock;
   if (manager) {
     const rows = aQuemCobrar();
@@ -3331,6 +3475,7 @@ function renderPainel() {
     ${cmdHtml}
     <span class="section-label">${solicView ? 'Demandas que você solicitou' : (setorView ? 'Demandas do setor' : 'Suas demandas')}</span>
     ${cards}
+    ${catLists}
     <div class="newbar"><button class="btn" onclick="openModal()">+ Nova demanda</button></div>
     <div class="p-row2">
       <div class="p-block"><span class="pb-label">Foco de hoje${solicView ? ' — solicitadas' : (setorView ? ' — setor' : (manager ? ' — suas demandas' : ''))}</span>${focoHtml}</div>
@@ -3350,6 +3495,16 @@ document.addEventListener("click", e => {
 });
 
 applyTheme(localStorage.getItem("theme") || "light");
+
+/* ══════════ Barra lateral retrátil ══════════ */
+function toggleSidebar() {
+  const win = document.querySelector('.appwin');
+  const collapsed = win.classList.toggle('sidebar-collapsed');
+  localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
+}
+if (localStorage.getItem('sidebarCollapsed') === '1') {
+  document.querySelector('.appwin').classList.add('sidebar-collapsed');
+}
 
 /* migração: demandas locais antigas sem código/progresso */
 {
@@ -3566,6 +3721,7 @@ function renderBell() {
   const list = document.getElementById("bellList");
   list.innerHTML = naoLidas.length ? naoLidas.map(notifRow).join("")
     : `<div class="bell-empty">Nenhuma notificação nova.</div>`;
+  document.getElementById("bellWrap").classList.toggle("has-alert", naoLidas.length > 0);
   renderMencoes();
 }
 /* Balão de conversa: só menções (@). */
@@ -3578,6 +3734,7 @@ function renderMencoes() {
   const list = document.getElementById("mencoesList");
   list.innerHTML = naoLidas.length ? naoLidas.map(notifRow).join("")
     : `<div class="bell-empty">Nenhuma menção nova.</div>`;
+  document.getElementById("mencoesWrap").classList.toggle("has-alert", naoLidas.length > 0);
 }
 function toggleBell(e) {
   e.stopPropagation();
