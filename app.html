@@ -998,7 +998,10 @@
   .appwin.sidebar-collapsed .sb-bottom #gearBtn { width: 40px; margin: 0 auto; }
 
   /* botões flutuantes (notificações + menções) — vermelhos, redondos, 3D, lado a lado */
-  .fab-stack { position: fixed; right: 26px; bottom: 26px; display: flex; flex-direction: row; gap: 14px; z-index: 200; }
+  .fab-stack { position: fixed; right: 26px; bottom: 26px; display: flex; flex-direction: row; gap: 14px; z-index: 200; transition: transform .25s ease; }
+  /* o drawer da demanda (480px, ancorado à direita) cobriria os botões — desliza pra fora da frente do "Salvar" */
+  .fab-stack.drawer-open { transform: translateX(calc(-480px - 20px)); }
+  @media (max-width: 560px) { .fab-stack.drawer-open { display: none; } }
   .fab { position: relative; }
   .fab-btn {
     width: 54px; height: 54px; border-radius: 50%; border: none; cursor: pointer;
@@ -2340,6 +2343,7 @@ function openModal(id) {
   renderPastaLink();
   setModalTab("criacao");   // sempre abre na aba Criação
   document.getElementById("overlay").classList.add("open");
+  const fs = document.querySelector(".fab-stack"); if (fs) fs.classList.add("drawer-open");   // sai da frente do drawer (botão Salvar fica no mesmo canto)
   (id ? document.getElementById("iTitulo") : document.getElementById("iParaBusca")).focus();
 }
 function confirmarConfidencial(cb) {
@@ -2447,6 +2451,7 @@ function setupApprovalBox(t) {
 
 function closeModal() {
   document.getElementById("overlay").classList.remove("open");
+  const fs = document.querySelector(".fab-stack"); if (fs) fs.classList.remove("drawer-open");
   editingId = null;
 }
 
