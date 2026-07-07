@@ -855,7 +855,12 @@
   .subt-row input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); flex-shrink: 0; cursor: pointer; }
   .subt-row span { flex: 1; font-size: .85rem; }
   .subt-row span.subt-done { text-decoration: line-through; color: var(--text-dim); }
-  .subt-del { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: .9rem; padding: 2px 6px; }
+  .subt-row .subt-num { flex: none; min-width: 18px; text-align: right; color: var(--text-mute); font-size: .76rem; font-weight: 700; }
+  .subt-edit-input { flex: 1; font-size: .85rem; padding: 4px 8px; background: var(--surface); border: 1px solid var(--accent); border-radius: 6px; color: var(--text); outline: none; font-family: inherit; }
+  .subt-btn { background: none; border: none; color: var(--text-mute); cursor: pointer; font-size: .82rem; padding: 2px 5px; border-radius: 5px; flex: none; line-height: 1; }
+  .subt-btn:hover:not(:disabled) { color: var(--accent); background: var(--surface-3); }
+  .subt-btn:disabled { opacity: .3; cursor: default; }
+  .subt-del { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: .9rem; padding: 2px 6px; flex: none; }
   .subt-del:hover { color: var(--red-bright); }
   .subt-empty { font-size: .8rem; color: var(--text-dim); padding: 4px 0 10px; }
   .subt-add { display: flex; gap: 8px; margin-top: 4px; }
@@ -2742,11 +2747,16 @@ function renderSubtarefas(t) {
   const done = subs.filter(s => s.concluida).length;
   const pct = subs.length ? Math.round(done / subs.length * 100) : (t.status === 'concluido' ? 100 : 0);
   const manage = podeGerirSubt(t);
-  const rows = subs.map(s => `
+  const rows = subs.map((s, i) => `
     <div class="subt-row">
       <input type="checkbox" ${s.concluida ? 'checked' : ''} ${manage ? '' : 'disabled'} onchange="toggleSubt(${s.id}, this.checked, '${t.id}')">
-      <span class="${s.concluida ? 'subt-done' : ''}">${esc(s.titulo)}</span>
-      ${manage ? `<button type="button" class="subt-del" title="Remover" onclick="delSubt(${s.id}, '${t.id}')">✕</button>` : ''}
+      <span class="subt-num">${i + 1}.</span>
+      <span class="subt-txt ${s.concluida ? 'subt-done' : ''}">${esc(s.titulo)}</span>
+      ${manage ? `
+        <button type="button" class="subt-btn" title="Subir" onclick="moveSubt(${s.id}, '${t.id}', -1)" ${i === 0 ? 'disabled' : ''}>▲</button>
+        <button type="button" class="subt-btn" title="Descer" onclick="moveSubt(${s.id}, '${t.id}', 1)" ${i === subs.length - 1 ? 'disabled' : ''}>▼</button>
+        <button type="button" class="subt-btn" title="Editar" onclick="editSubt(this, ${s.id}, '${t.id}')">✎</button>
+        <button type="button" class="subt-del" title="Remover" onclick="delSubt(${s.id}, '${t.id}')">✕</button>` : ''}
     </div>`).join("");
   sec.innerHTML = `
     <div class="subt-head"><label style="margin:0">Subtarefas</label><span>${done}/${subs.length} · ${pct}%</span></div>
@@ -2786,6 +2796,57 @@ async function delSubt(id, demandaId) {
     await refreshSubt(demandaId);
   } catch (e) { alert("Falha ao remover subtarefa: " + (e.message || e)); }
 }
+/* reordena: sobe (-1) ou desce (+1) e re-normaliza a ordem (0..n-1) só nas que mudaram */
+async function moveSubt(id, demandaId, dir) {
+  if (!sb) return;
+  const arr = (SUBT_BY_DEMANDA[String(demandaId)] || []).slice()
+    .sort((a, b) => (a.ordem || 0) - (b.ordem || 0) || a.id - b.id);
+  const i = arr.findIndex(s => String(s.id) === String(id));
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+  try {
+    for (let k = 0; k < arr.length; k++) {
+      if ((arr[k].ordem || 0) !== k) {
+        const { error } = await sb.from("subtarefas").update({ ordem: k }).eq("id", arr[k].id);
+        if (error) throw error;
+      }
+    }
+    await refreshSubt(demandaId);
+  } catch (e) { alert("Falha ao reordenar: " + (e.message || e)); }
+}
+/* edição inline do texto da subtarefa */
+function editSubt(btn, id, demandaId) {
+  const row = btn.closest(".subt-row");
+  const span = row && row.querySelector(".subt-txt");
+  if (!span) return;
+  const atual = span.textContent;
+  const inp = document.createElement("input");
+  inp.type = "text"; inp.className = "subt-edit-input"; inp.value = atual;
+  span.replaceWith(inp);
+  row.querySelectorAll(".subt-btn, .subt-del").forEach(b => b.style.display = "none");
+  inp.focus(); inp.select();
+  let done = false;
+  const salvar = () => {
+    if (done) return; done = true;
+    const v = inp.value.trim();
+    if (v && v !== atual) saveSubtTitulo(id, demandaId, v);
+    else refreshSubt(demandaId);
+  };
+  inp.addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); salvar(); }
+    else if (e.key === "Escape") { done = true; refreshSubt(demandaId); }
+  });
+  inp.addEventListener("blur", salvar);
+}
+async function saveSubtTitulo(id, demandaId, titulo) {
+  if (!sb) { alert("Sem conexão com o servidor."); return; }
+  try {
+    const { error } = await sb.from("subtarefas").update({ titulo }).eq("id", id);
+    if (error) throw error;
+    await refreshSubt(demandaId);
+  } catch (e) { alert("Falha ao editar subtarefa: " + (e.message || e)); }
+}
 async function refreshSubt(demandaId) {
   await loadFromSupabase();   // recarrega subtarefas + status/progresso (trigger pode ter concluído/reaberto)
   await loadNotificacoes();
@@ -2800,7 +2861,11 @@ function renderSubtCreate() {
   sec.style.display = "";
   const rows = novaSubt.map((titulo, i) => `
     <div class="subt-row">
-      <span>${esc(titulo)}</span>
+      <span class="subt-num">${i + 1}.</span>
+      <span class="subt-txt">${esc(titulo)}</span>
+      <button type="button" class="subt-btn" title="Subir" onclick="moveNovaSubt(${i}, -1)" ${i === 0 ? 'disabled' : ''}>▲</button>
+      <button type="button" class="subt-btn" title="Descer" onclick="moveNovaSubt(${i}, 1)" ${i === novaSubt.length - 1 ? 'disabled' : ''}>▼</button>
+      <button type="button" class="subt-btn" title="Editar" onclick="editNovaSubt(${i})">✎</button>
       <button type="button" class="subt-del" title="Remover" onclick="removeNovaSubt(${i})">✕</button>
     </div>`).join("");
   sec.innerHTML = `
@@ -2820,6 +2885,18 @@ function addNovaSubt() {
   const ni = document.getElementById("subtNew"); if (ni) ni.focus();
 }
 function removeNovaSubt(i) { novaSubt.splice(i, 1); renderSubtCreate(); }
+function moveNovaSubt(i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= novaSubt.length) return;
+  [novaSubt[i], novaSubt[j]] = [novaSubt[j], novaSubt[i]];
+  renderSubtCreate();
+}
+function editNovaSubt(i) {
+  const novo = prompt("Editar subtarefa:", novaSubt[i]);
+  if (novo === null) return;
+  const t = novo.trim();
+  if (t) { novaSubt[i] = t; renderSubtCreate(); }
+}
 
 async function saveTask(e) {
   e.preventDefault();
