@@ -918,7 +918,11 @@
   .subt-head { display: flex; justify-content: space-between; align-items: center; font-size: .72rem; color: var(--text-dim); margin-bottom: 6px; }
   .subt-bar { height: 6px; background: var(--surface-3); border-radius: 99px; overflow: hidden; margin-bottom: 12px; }
   .subt-bar > div { height: 100%; background: var(--accent); border-radius: 99px; transition: width .25s; }
-  .subt-row { display: flex; gap: 10px; align-items: center; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; transition: opacity .15s, box-shadow .15s; }
+  .subt-row { display: flex; gap: 10px; align-items: flex-start; padding: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; transition: opacity .15s, box-shadow .15s; }
+  /* controles (alcinha/checkbox/número/editar/excluir) ficam ao lado da 1ª linha do texto, não centralizados
+     no meio de um texto longo que quebra em várias linhas — evita o "espaço em branco" visual */
+  .subt-row > .subt-drag, .subt-row > input[type=checkbox], .subt-row > .subt-num, .subt-row > .subt-btn, .subt-row > .subt-del { margin-top: 1px; }
+  .subt-row .subt-txt { line-height: 1.45; }
   .subt-row[draggable="true"] { cursor: grab; }
   .subt-row.dragging { opacity: .35; box-shadow: 0 0 0 2px var(--accent) inset; }
   .subt-drag { flex: none; color: var(--text-mute); font-size: 1rem; line-height: 1; cursor: grab; padding: 0 2px; user-select: none; }
