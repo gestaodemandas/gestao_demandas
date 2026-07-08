@@ -918,7 +918,11 @@
   .subt-head { display: flex; justify-content: space-between; align-items: center; font-size: .72rem; color: var(--text-dim); margin-bottom: 6px; }
   .subt-bar { height: 6px; background: var(--surface-3); border-radius: 99px; overflow: hidden; margin-bottom: 12px; }
   .subt-bar > div { height: 100%; background: var(--accent); border-radius: 99px; transition: width .25s; }
-  .subt-row { display: flex; gap: 10px; align-items: center; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; }
+  .subt-row { display: flex; gap: 10px; align-items: center; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; transition: opacity .15s, box-shadow .15s; }
+  .subt-row[draggable="true"] { cursor: grab; }
+  .subt-row.dragging { opacity: .35; box-shadow: 0 0 0 2px var(--accent) inset; }
+  .subt-drag { flex: none; color: var(--text-mute); font-size: 1rem; line-height: 1; cursor: grab; padding: 0 2px; user-select: none; }
+  .subt-drag:active { cursor: grabbing; }
   .subt-row input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); flex-shrink: 0; cursor: pointer; }
   .subt-row span { flex: 1; font-size: .85rem; }
   .subt-row span.subt-done { text-decoration: line-through; color: var(--text-dim); }
@@ -2902,13 +2906,12 @@ function renderSubtarefas(t) {
   const pct = subs.length ? Math.round(done / subs.length * 100) : (t.status === 'concluido' ? 100 : 0);
   const manage = podeGerirSubt(t);
   const rows = subs.map((s, i) => `
-    <div class="subt-row">
+    <div class="subt-row" data-id="${s.id}" ${manage ? `draggable="true" ondragstart="subtDragStart(event,this)" ondragover="subtDragOver(event,this)" ondragend="subtDragEndSaved('${t.id}')"` : ''}>
+      ${manage ? '<span class="subt-drag" title="Arraste para reordenar">⠿</span>' : ''}
       <input type="checkbox" ${s.concluida ? 'checked' : ''} ${manage ? '' : 'disabled'} onchange="toggleSubt(${s.id}, this.checked, '${t.id}')">
       <span class="subt-num">${i + 1}.</span>
       <span class="subt-txt ${s.concluida ? 'subt-done' : ''}">${esc(s.titulo)}</span>
       ${manage ? `
-        <button type="button" class="subt-btn" title="Subir" onclick="moveSubt(${s.id}, '${t.id}', -1)" ${i === 0 ? 'disabled' : ''}>▲</button>
-        <button type="button" class="subt-btn" title="Descer" onclick="moveSubt(${s.id}, '${t.id}', 1)" ${i === subs.length - 1 ? 'disabled' : ''}>▼</button>
         <button type="button" class="subt-btn" title="Editar" onclick="editSubt(this, ${s.id}, '${t.id}')">✎</button>
         <button type="button" class="subt-del" title="Remover" onclick="delSubt(${s.id}, '${t.id}')">✕</button>` : ''}
     </div>`).join("");
@@ -2950,24 +2953,50 @@ async function delSubt(id, demandaId) {
     await refreshSubt(demandaId);
   } catch (e) { alert("Falha ao remover subtarefa: " + (e.message || e)); }
 }
-/* reordena: sobe (-1) ou desce (+1) e re-normaliza a ordem (0..n-1) só nas que mudaram */
-async function moveSubt(id, demandaId, dir) {
+/* reordenar por arrastar (clicar e segurar) — vale p/ subtarefas salvas e p/ a lista de criação */
+let _subtDragEl = null;
+function subtDragStart(e, row) {
+  _subtDragEl = row;
+  row.classList.add("dragging");
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", "");   // Firefox exige setData p/ o drag funcionar
+}
+function subtDragOver(e, row) {
+  e.preventDefault();
+  if (!_subtDragEl || _subtDragEl === row) return;
+  const rect = row.getBoundingClientRect();
+  const antesDoAlvo = (e.clientY - rect.top) < rect.height / 2;
+  row.parentElement.insertBefore(_subtDragEl, antesDoAlvo ? row : row.nextSibling);
+}
+/* soltou numa subtarefa JÁ SALVA: lê a ordem final do DOM e grava só o que mudou */
+async function subtDragEndSaved(demandaId) {
+  if (_subtDragEl) _subtDragEl.classList.remove("dragging");
+  _subtDragEl = null;
   if (!sb) return;
-  const arr = (SUBT_BY_DEMANDA[String(demandaId)] || []).slice()
-    .sort((a, b) => (a.ordem || 0) - (b.ordem || 0) || a.id - b.id);
-  const i = arr.findIndex(s => String(s.id) === String(id));
-  const j = i + dir;
-  if (i < 0 || j < 0 || j >= arr.length) return;
-  [arr[i], arr[j]] = [arr[j], arr[i]];
+  const list = document.querySelector("#subtSection .subt-list");
+  if (!list) return;
+  const idsNaOrdem = Array.from(list.querySelectorAll(".subt-row")).map(r => r.dataset.id);
+  const arr = SUBT_BY_DEMANDA[String(demandaId)] || [];
   try {
-    for (let k = 0; k < arr.length; k++) {
-      if ((arr[k].ordem || 0) !== k) {
-        const { error } = await sb.from("subtarefas").update({ ordem: k }).eq("id", arr[k].id);
+    for (let k = 0; k < idsNaOrdem.length; k++) {
+      const s = arr.find(x => String(x.id) === String(idsNaOrdem[k]));
+      if (s && (s.ordem || 0) !== k) {
+        const { error } = await sb.from("subtarefas").update({ ordem: k }).eq("id", s.id);
         if (error) throw error;
       }
     }
     await refreshSubt(demandaId);
   } catch (e) { alert("Falha ao reordenar: " + (e.message || e)); }
+}
+/* soltou na lista de CRIAÇÃO (staging, ainda sem id no banco): reordena o array local pelo índice original */
+function subtDragEndStaging() {
+  if (_subtDragEl) _subtDragEl.classList.remove("dragging");
+  _subtDragEl = null;
+  const list = document.querySelector("#subtSection .subt-list");
+  if (!list) return;
+  const ordemOriginal = Array.from(list.querySelectorAll(".subt-row")).map(r => Number(r.dataset.idx));
+  novaSubt = ordemOriginal.map(i => novaSubt[i]);
+  renderSubtCreate();
 }
 /* edição inline do texto da subtarefa */
 function editSubt(btn, id, demandaId) {
@@ -3014,11 +3043,10 @@ function renderSubtCreate() {
   if (!sec) return;
   sec.style.display = "";
   const rows = novaSubt.map((titulo, i) => `
-    <div class="subt-row">
+    <div class="subt-row" data-idx="${i}" draggable="true" ondragstart="subtDragStart(event,this)" ondragover="subtDragOver(event,this)" ondragend="subtDragEndStaging()">
+      <span class="subt-drag" title="Arraste para reordenar">⠿</span>
       <span class="subt-num">${i + 1}.</span>
       <span class="subt-txt">${esc(titulo)}</span>
-      <button type="button" class="subt-btn" title="Subir" onclick="moveNovaSubt(${i}, -1)" ${i === 0 ? 'disabled' : ''}>▲</button>
-      <button type="button" class="subt-btn" title="Descer" onclick="moveNovaSubt(${i}, 1)" ${i === novaSubt.length - 1 ? 'disabled' : ''}>▼</button>
       <button type="button" class="subt-btn" title="Editar" onclick="editNovaSubt(${i})">✎</button>
       <button type="button" class="subt-del" title="Remover" onclick="removeNovaSubt(${i})">✕</button>
     </div>`).join("");
@@ -3039,12 +3067,6 @@ function addNovaSubt() {
   const ni = document.getElementById("subtNew"); if (ni) ni.focus();
 }
 function removeNovaSubt(i) { novaSubt.splice(i, 1); renderSubtCreate(); }
-function moveNovaSubt(i, dir) {
-  const j = i + dir;
-  if (j < 0 || j >= novaSubt.length) return;
-  [novaSubt[i], novaSubt[j]] = [novaSubt[j], novaSubt[i]];
-  renderSubtCreate();
-}
 function editNovaSubt(i) {
   const novo = prompt("Editar subtarefa:", novaSubt[i]);
   if (novo === null) return;
